@@ -1,0 +1,22 @@
+{
+  "short_name": "CoachClip",
+  "name": "CoachClip - Enkel sportsanalyse med video",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=192&q=80",
+      "type": "image/jpeg",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=512&q=80",
+      "type": "image/jpeg",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#F4F6F8",
+  "theme_color": "#123B5D",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["sports", "productivity", "utilities"]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "CoachClip",
+  "description": "Enkel sportsanalyse med video. Find situationen. Forklar den. Del den.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

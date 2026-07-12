@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Outfit", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-dark: #123B5D;
+  --color-brand-clear: #2D8CFF;
+  --color-brand-accent: #FFB020;
+  --color-brand-success: #2FA36B;
+  --color-brand-error: #D64545;
+  --color-brand-bg: #F4F6F8;
+  --color-brand-panel: #FFFFFF;
+}
+
+/* Custom global styles for smooth responsive layout and sports utility */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-brand-bg);
+  color: #1e293b;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Headings utilize the premium display font */
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Custom scrollbar for pristine design */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Accessible focus ring */
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid var(--color-brand-clear);
+  outline-offset: 2px;
+}
+
