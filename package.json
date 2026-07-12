@@ -12,7 +12,12 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke:export:simple": "tsx scripts/smokeExportSimple.ts",
+    "smoke:export:no-audio": "tsx scripts/smokeExportNoAudio.ts",
+    "smoke:api:simple": "tsx scripts/smokeApiSimple.ts",
+    "smoke:export": "tsx scripts/smokeExportCombined.ts",
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run smoke:export:simple && npm run smoke:export:no-audio && npm run smoke:export && npm run smoke:api:simple"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -33,12 +38,15 @@
     "@typescript-eslint/parser": "^8.63.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.1",
-    "eslint": "^10.7.0",
+    "eslint": "^9.20.0",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-hooks": "^5.1.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.23.0",
     "typescript": "~5.8.2",
     "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20 <23"
   }
 }

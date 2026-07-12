@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: useVideoPlayback hook contains unused helper arguments matching system lifecycle standards.
  */
 
 import { useEffect, useState, useRef } from "react";

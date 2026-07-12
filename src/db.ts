@@ -20,7 +20,7 @@ function getDB(): Promise<IDBDatabase> {
       resolve(request.result);
     };
 
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = (_event) => {
       const db = request.result;
       if (!db.objectStoreNames.contains("projects")) {
         db.createObjectStore("projects", { keyPath: "id" });

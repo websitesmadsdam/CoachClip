@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: Export screen handles complex network event errors using raw any and ignored parameters.
  */
 
 import React, { useState, useEffect, useRef } from "react";

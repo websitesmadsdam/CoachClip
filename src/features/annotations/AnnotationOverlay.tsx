@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Annotation, TextAnnotation, CircleAnnotation, ArrowAnnotation } from "../../types";
 import { CircleAnnotationView } from "./circle/CircleAnnotationView";
 import { ArrowAnnotationView } from "./arrow/ArrowAnnotationView";
@@ -41,7 +41,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [videoBounds, setVideoBounds] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const { startDrag } = usePointerDrag();
 
-  const updateBounds = () => {
+  const updateBounds = useCallback(() => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const bounds = getDisplayedVideoBounds(
@@ -51,7 +51,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       videoHeight
     );
     setVideoBounds(bounds);
-  };
+  }, [containerRef, videoWidth, videoHeight]);
 
   // Monitor resizes
   useEffect(() => {
@@ -61,7 +61,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       observer.observe(containerRef.current);
     }
     return () => observer.disconnect();
-  }, [containerRef, videoWidth, videoHeight]);
+  }, [containerRef, updateBounds]);
 
   const getRelativeCoords = (clientX: number, clientY: number) => {
     if (!containerRef.current) return { x: 0.5, y: 0.5 };

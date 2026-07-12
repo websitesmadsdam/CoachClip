@@ -16,13 +16,13 @@ interface AnnotationListProps {
   startTime: number;
 }
 
-export const AnnotationList: React.FC<AnnotationListProps> = ({
-  annotations,
-  selectedAnnotationId,
-  onSelectAnnotation,
-  onDeleteAnnotation,
-  startTime,
-}) => {
+export const AnnotationList: React.FC<AnnotationListProps> = (props) => {
+  const {
+    annotations,
+    selectedAnnotationId,
+    onSelectAnnotation,
+    onDeleteAnnotation,
+  } = props;
   const formatTimeRangeLocal = (start: number, end: number) => {
     return `${formatPreciseTime(start)} – ${formatPreciseTime(end)}`;
   };

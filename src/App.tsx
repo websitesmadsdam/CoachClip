@@ -5,11 +5,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Film, LayoutGrid, FolderHeart, Settings, PlusCircle, 
-  Upload, Sparkles, Plus, AlertCircle, Trash2, Edit, Play,
-  Copy, Check, Share2, Download, AlertTriangle, RefreshCw, X, CheckCircle2
+  Share2, Download, AlertTriangle, X, CheckCircle2
 } from "lucide-react";
-import { CoachClipProject, Collection, Annotation, BRAND_COLORS } from "./types";
+import { CoachClipProject, Collection, Annotation, BRAND_COLORS, ArrowAnnotation, CircleAnnotation, TextAnnotation } from "./types";
 import { dbService } from "./db";
 import { Sidebar } from "./components/Sidebar";
 import { BottomNav } from "./components/BottomNav";
@@ -429,16 +427,6 @@ export default function App() {
     setPreviewCurrentTime(proj.clip.startTime);
   };
 
-  const handlePreviewTimeUpdate = () => {
-    const video = previewVideoRef.current;
-    if (!video || !previewProject) return;
-
-    setPreviewCurrentTime(video.currentTime);
-    if (video.currentTime >= previewProject.clip.endTime) {
-      video.currentTime = previewProject.clip.startTime;
-    }
-  };
-
   const isEditingVideo = ["choose", "trim", "adjust", "editor", "review", "save", "exporting", "success"].includes(editorStep);
 
   return (
@@ -561,7 +549,7 @@ export default function App() {
                         </marker>
                       </defs>
 
-                      {annotations.filter(a => a.type === "arrow" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((arrow: any) => (
+                      {annotations.filter(a => a.type === "arrow" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((arrow: ArrowAnnotation) => (
                         <line
                           key={arrow.id}
                           x1={`${arrow.startX * 100}%`}
@@ -575,7 +563,7 @@ export default function App() {
                       ))}
                     </svg>
 
-                    {annotations.filter(a => a.type === "circle" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((circle: any) => (
+                    {annotations.filter(a => a.type === "circle" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((circle: CircleAnnotation) => (
                       <div
                         key={circle.id}
                         className="absolute rounded-full border-4"
@@ -592,7 +580,7 @@ export default function App() {
                       />
                     ))}
 
-                    {annotations.filter(a => a.type === "text" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((text: any) => (
+                    {annotations.filter(a => a.type === "text" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((text: TextAnnotation) => (
                       <div
                         key={text.id}
                         className="absolute px-3 py-1.5 rounded-lg text-white font-semibold bg-black/80 shadow text-center max-w-[220px]"

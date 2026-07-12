@@ -8,10 +8,10 @@ import fs from "fs";
 import path from "path";
 import { ExportRequestMetadata } from "../types/exportTypes";
 import { exportJobService } from "./exportJobService";
-import { Annotation } from "../../../src/types";
+import { Annotation, FreezeAnnotation } from "../../../src/types";
 
 // Active FFmpeg processes map for cancellation tracking
-const activeProcesses = new Map<string, any>();
+const activeProcesses = new Map<string, import("child_process").ChildProcess>();
 
 // Promisified helper to run spawn securely without a shell (immune to injection)
 function runProcess(command: string, args: string[], jobId?: string): Promise<string> {
@@ -67,6 +67,86 @@ export class FfmpegExportService {
       }
     }
     return false;
+  }
+
+  // Simple export method without annotations, freeze, or complex overlays
+  public static async exportSimpleClip(options: {
+    inputPath: string;
+    outputPath: string;
+    startTime: number;
+    duration: number;
+    sourceMetadata: { width: number; height: number; duration: number };
+    signal?: AbortSignal;
+    jobId?: string;
+  }): Promise<{ success: boolean; duration: number; size: number }> {
+    const { inputPath, outputPath, startTime, duration, sourceMetadata, jobId } = options;
+
+    let outW = sourceMetadata.width;
+    let outH = sourceMetadata.height;
+
+    if (sourceMetadata.width > 1920 || sourceMetadata.height > 1080) {
+      const scale = Math.min(1920 / sourceMetadata.width, 1080 / sourceMetadata.height);
+      outW = Math.round((sourceMetadata.width * scale) / 2) * 2;
+      outH = Math.round((sourceMetadata.height * scale) / 2) * 2;
+    } else {
+      outW = Math.round(sourceMetadata.width / 2) * 2;
+      outH = Math.round(sourceMetadata.height / 2) * 2;
+    }
+
+    const sourceFps = await this.getVideoFps(inputPath);
+    const outputFps = Number.isFinite(sourceFps)
+      ? Math.min(Math.max(sourceFps, 24), 60)
+      : 30;
+
+    const hasAudio = await this.hasAudioStream(inputPath);
+
+    const args = [
+      "-ss", String(startTime),
+      "-i", inputPath,
+      "-t", String(duration)
+    ];
+
+    const videoFilters = `scale=${outW}:${outH}`;
+    args.push("-vf", videoFilters);
+    args.push("-map", "0:v:0");
+
+    if (hasAudio) {
+      args.push("-map", "0:a:0?");
+    }
+
+    args.push(
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      "-r", String(outputFps)
+    );
+
+    if (hasAudio) {
+      args.push(
+        "-c:a", "aac",
+        "-ar", "48000",
+        "-ac", "2"
+      );
+    }
+
+    args.push("-movflags", "+faststart", "-y", outputPath);
+
+    await runProcess("ffmpeg", args, jobId);
+
+    // Validate using ffprobe to satisfy Phase 2.5
+    await runProcess("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration,size",
+      "-of", "json",
+      outputPath
+    ]);
+
+    const stats = fs.statSync(outputPath);
+
+    return {
+      success: true,
+      duration,
+      size: stats.size
+    };
   }
 
   // Check if input video has audio
@@ -282,14 +362,13 @@ export class FfmpegExportService {
       const end = metadata.clip.endTime;
 
       // 3. Extract and filter valid freeze annotations
-      const freezes = metadata.annotations
-        .filter((a) => a.type === "freeze")
-        .map((a) => a as any)
+      const freezes = (metadata.annotations
+        .filter((a) => a.type === "freeze") as FreezeAnnotation[])
         .filter((f) => f.time >= start && f.time <= end && f.duration > 0)
         .sort((a, b) => a.time - b.time);
 
       // Avoid overlapping freezes
-      const validFreezes: any[] = [];
+      const validFreezes: FreezeAnnotation[] = [];
       let lastFreezeTime = -1;
       for (const f of freezes) {
         if (f.time >= lastFreezeTime) {
@@ -339,12 +418,15 @@ export class FfmpegExportService {
 
           // Filter active annotations for this range
           const activeAnnos = metadata.annotations.filter(
-            (a) => a.type !== "freeze" && !((a as any).endTime < seg.start || (a as any).startTime > seg.end)
-          ) as Exclude<Annotation, { type: "freeze" }>[];
+            (a): a is Exclude<Annotation, { type: "freeze" }> => {
+              if (a.type === "freeze") return false;
+              return !(a.endTime < seg.start || a.startTime > seg.end);
+            }
+          );
 
           if (activeAnnos.length > 0) {
             // Render individual SVG for each active annotation to overlay with correct timing
-            const overlayArgs: string[] = ["-ss", String(seg.start), "-to", String(seg.end), "-i", inputPath];
+            const overlayArgs: string[] = ["-ss", String(seg.start), "-t", String(seg.end - seg.start), "-i", inputPath];
             const filterChains: string[] = [`[0:v]scale=${outW}:${outH}[v0]`];
 
             for (let k = 0; k < activeAnnos.length; k++) {
@@ -373,7 +455,7 @@ export class FfmpegExportService {
             ];
 
             if (hasAudio) {
-              filterString += "; [0:a]aconvert=sample_rates=44100:channel_layouts=stereo[a_out]";
+              filterString += "; [0:a]aresample=async=1,aformat=sample_rates=44100:channel_layouts=stereo[a_out]";
               finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac");
             } else {
               // Generate silent audio inline to bypass variable audio layout bugs
@@ -395,12 +477,12 @@ export class FfmpegExportService {
             let filterString = `[0:v]scale=${outW}:${outH}[v_out]`;
             const finalArgs = [
               "-ss", String(seg.start),
-              "-to", String(seg.end),
+              "-t", String(seg.end - seg.start),
               "-i", inputPath
             ];
 
             if (hasAudio) {
-              filterString += "; [0:a]aconvert=sample_rates=44100:channel_layouts=stereo[a_out]";
+              filterString += "; [0:a]aresample=async=1,aformat=sample_rates=44100:channel_layouts=stereo[a_out]";
               finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac");
             } else {
               filterString += "; anullsrc=channel_layout=stereo:sample_rate=44100[a_out]";
@@ -444,22 +526,33 @@ export class FfmpegExportService {
           const svgPath = path.join(jobTmpDir, `freeze_svg_${i}.svg`);
           fs.writeFileSync(svgPath, svgContent);
 
-          // 4. Render freeze MP4 with silence and annotation burned in
+          // 4. Create annotated frame by overlaying the SVG onto the PNG frame (instantaneous single-frame output)
+          const annotatedImgFile = path.join(jobTmpDir, `freeze_annotated_${i}.png`);
+          await runProcess("ffmpeg", [
+            "-i", imgFile,
+            "-i", svgPath,
+            "-filter_complex", `[0:v]scale=${outW}:${outH}[scaled]; [scaled][1:v]overlay=0:0`,
+            "-vframes", "1",
+            "-y",
+            annotatedImgFile
+          ], jobId);
+
+          // 5. Render freeze MP4 of exactly `seg.duration` length from the static annotated image
           await runProcess("ffmpeg", [
             "-loop", "1",
             "-t", String(seg.duration),
-            "-i", imgFile,
-            "-i", svgPath,
-            "-filter_complex", `[0:v]scale=${outW}:${outH}[v0]; [v0][1:v]overlay=0:0[v_out]; anullsrc=channel_layout=stereo:sample_rate=44100[a_out]`,
-            "-map", "[v_out]",
-            "-map", "[a_out]",
+            "-i", annotatedImgFile,
+            "-f", "lavfi",
+            "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-r", String(fps),
             "-c:a", "aac",
             "-ar", "44100",
             "-ac", "2",
-            "-shortest",
+            "-t", String(seg.duration),
             "-y",
             segOutFile
           ], jobId);
@@ -508,7 +601,7 @@ export class FfmpegExportService {
           expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
         }
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`Export Job ${jobId} failed with error:`, err);
       exportJobService.updateJob(jobId, {
         status: "failed",

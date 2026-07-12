@@ -5,8 +5,8 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { 
-  Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Check, ArrowLeft,
-  Type, Circle, MoveUpRight, Snowflake, Edit2, Info
+  Play, Pause, RotateCcw, ChevronRight, Check, ArrowLeft,
+  Type, Circle, MoveUpRight, Snowflake, Info
 } from "lucide-react";
 import { Annotation, TextAnnotation, CircleAnnotation, ArrowAnnotation, FreezeAnnotation } from "../../types";
 import { AnnotationOverlay } from "./AnnotationOverlay";
@@ -53,9 +53,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   const {
     videoRef,
     isPlaying,
-    setIsPlaying,
     currentTime,
-    setCurrentTime,
     playbackRate,
     setPlaybackRate,
     togglePlay,
@@ -69,7 +67,6 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   const {
     freezeActiveId,
     freezeRemaining,
-    resetFreeze,
   } = useFreezePlayback(
     currentTime,
     annotations,
@@ -92,7 +89,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
     if (activeTool || draftAnnotation) {
       pauseVideo();
     }
-  }, [activeTool, draftAnnotation]);
+  }, [activeTool, draftAnnotation, pauseVideo]);
 
   // Handle saving of active draft
   const saveDraft = () => {

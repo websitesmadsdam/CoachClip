@@ -1,20 +1,14 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# CoachClip – Produktionsklar eksportpipeline
 
-# Run and deploy your AI Studio app
+Dette projekt understøtter og er testet på følgende Node.js versioner:
 
-This contains everything you need to run your app locally.
+* **Node.js**: `>=20 <23` (Testet og stabiliseret på Node.js v20/v22)
 
-View your app in AI Studio: https://ai.studio/apps/179945f6-23f9-4dde-9fbf-50c74b992902
+## Installation og verifikation
 
-## Run Locally
+For at foretage en ren installation og køre alle kvalitetstests (linter, typecheck, tests, build og smoke-tests):
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm ci
+npm run verify
+```

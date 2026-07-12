@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useState, useEffect } from "react";
-import { Play, Pause, RotateCcw, ChevronRight, ArrowLeft, FastForward, Film } from "lucide-react";
+import { Play, Pause, RotateCcw, ChevronRight, ArrowLeft, FastForward } from "lucide-react";
 import { formatPreciseTime, clampTime } from "../utils/videoUtils";
 
 interface ClipSelectScreenProps {

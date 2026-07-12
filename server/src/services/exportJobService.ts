@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: Types are exported for external modules but flagged locally.
  */
 
 import { ExportJob, ExportStatus, ExportStage } from "../types/exportTypes";

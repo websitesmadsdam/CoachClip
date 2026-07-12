@@ -6,9 +6,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   FolderHeart, Plus, Trash2, ArrowUp, ArrowDown, Play, 
-  Video, ChevronRight, X, Sparkles, FolderPlus, Clock, Film
+  Video, ChevronRight, X, FolderPlus, Clock, Film
 } from "lucide-react";
-import { Collection, CoachClipProject, Annotation, BRAND_COLORS } from "../types";
+import { Collection, CoachClipProject, BRAND_COLORS, ArrowAnnotation, CircleAnnotation, TextAnnotation } from "../types";
 import { dbService } from "../db";
 
 interface CollectionsScreenProps {
@@ -18,11 +18,8 @@ interface CollectionsScreenProps {
   onProjectsUpdate: () => void;
 }
 
-export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({
-  projects,
-  onBackToHome,
-  onProjectsUpdate,
-}) => {
+export const CollectionsScreen: React.FC<CollectionsScreenProps> = (props) => {
+  const { projects } = props;
   const [collections, setCollections] = useState<Collection[]>([]);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   
@@ -529,7 +526,7 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({
                   </defs>
 
                   {/* Playback arrows */}
-                  {activePlaylistAnnos.filter(a => a.type === "arrow").map((arrow: any) => (
+                  {activePlaylistAnnos.filter(a => a.type === "arrow").map((arrow: ArrowAnnotation) => (
                     <line
                       key={arrow.id}
                       x1={`${arrow.startX * 100}%`}
@@ -544,7 +541,7 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({
                 </svg>
 
                 {/* Playback circles */}
-                {activePlaylistAnnos.filter(a => a.type === "circle").map((circle: any) => (
+                {activePlaylistAnnos.filter(a => a.type === "circle").map((circle: CircleAnnotation) => (
                   <div
                     key={circle.id}
                     className="absolute rounded-full border-4"
@@ -561,7 +558,7 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({
                 ))}
 
                 {/* Playback texts */}
-                {activePlaylistAnnos.filter(a => a.type === "text").map((text: any) => (
+                {activePlaylistAnnos.filter(a => a.type === "text").map((text: TextAnnotation) => (
                   <div
                     key={text.id}
                     className="absolute px-3 py-1.5 rounded-lg text-white font-semibold text-center bg-black/70 shadow-lg"

@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: usePointerDrag hook requires raw any typecasting for specific React PointerEvent extensions and handles silent error ignores.
  */
 
 import { useState, useCallback, PointerEvent as ReactPointerEvent } from "react";

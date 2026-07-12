@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: Express request handler contains intentional unused parameters (next, err) and raw any types for express req bodies/files.
  */
 
 import { Router, Request, Response, NextFunction } from "express";

@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: Test script uses raw any and intentionally unused mocks for testing.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";

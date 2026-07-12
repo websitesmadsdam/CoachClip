@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useState, useEffect } from "react";
-import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Check, ArrowLeft, FastForward } from "lucide-react";
+import { Play, Pause, RotateCcw, ChevronRight, ArrowLeft, FastForward } from "lucide-react";
 
 interface TrimScreenProps {
   videoUrl: string;

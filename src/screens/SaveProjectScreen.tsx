@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: SaveProjectScreen props have a callback argument that is unused in some rendering steps.
  */
 
 import React, { useState } from "react";

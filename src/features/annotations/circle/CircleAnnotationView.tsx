@@ -41,9 +41,6 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
     e.stopPropagation();
     if (onSelect) onSelect();
 
-    const initialX = annotation.x;
-    const initialY = annotation.y;
-
     startCenterDrag(e, {
       onStart: () => {},
       onDrag: (clientX, clientY) => {
@@ -91,10 +88,6 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
       },
     });
   };
-
-  // Convert relative radius to percentages
-  const widthPercent = annotation.radius * 2 * 100;
-  const heightPercent = annotation.radius * 2 * 100;
 
   return (
     <div

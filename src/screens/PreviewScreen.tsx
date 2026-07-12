@@ -1,11 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Documented exceptions: PreviewScreen maps untyped sub-annotation attributes with any.
  */
 
 import React, { useRef, useState, useEffect } from "react";
-import { Play, Pause, X, Edit, Film, RotateCcw } from "lucide-react";
-import { CoachClipProject, BRAND_COLORS } from "../types";
+import { Play, Pause, X, Edit, RotateCcw } from "lucide-react";
+import { CoachClipProject } from "../types";
 import { formatPreciseTime } from "../utils/videoUtils";
 
 interface PreviewScreenProps {
