@@ -6,6 +6,7 @@
 import React from "react";
 import { CircleAnnotation } from "../../../types";
 import { usePointerDrag } from "../../../hooks/usePointerDrag";
+import { getCircleGeometry } from "../../../../shared/annotationGeometry";
 
 interface CircleAnnotationViewProps {
   annotation: CircleAnnotation;
@@ -89,6 +90,8 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
     });
   };
 
+  const { radiusPx } = getCircleGeometry(videoBounds.width, videoBounds.height, annotation.radius);
+
   return (
     <div
       onPointerDown={handleCenterDown}
@@ -96,8 +99,8 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
       style={{
         left: `${(annotation.x * videoBounds.width + videoBounds.left)}px`,
         top: `${(annotation.y * videoBounds.height + videoBounds.top)}px`,
-        width: `${annotation.radius * 2 * videoBounds.width}px`,
-        height: `${annotation.radius * 2 * videoBounds.height}px`,
+        width: `${radiusPx * 2}px`,
+        height: `${radiusPx * 2}px`,
         transform: "translate(-50%, -50%)",
         pointerEvents: "auto",
       }}

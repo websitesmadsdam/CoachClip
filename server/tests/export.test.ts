@@ -10,6 +10,8 @@ import { exportJobService } from "../src/services/exportJobService";
 import { FileCleanupService } from "../src/services/fileCleanupService";
 import fs from "fs";
 import path from "path";
+import { getCircleGeometry, getArrowGeometry, getTextGeometry } from "../../shared/annotationGeometry";
+import { sanitizeExportFileName } from "../../shared/exportSchema";
 
 describe("CoachClip Backend MVP - Unit Tests", () => {
   beforeEach(() => {
@@ -148,6 +150,52 @@ describe("CoachClip Backend MVP - Unit Tests", () => {
       expect(deletedCount).toBe(1);
       expect(fs.existsSync(activeFile)).toBe(true);
       expect(fs.existsSync(expiredFile)).toBe(false);
+    });
+  });
+
+  // 4. Test Shared Geometry Calculations
+  describe("Shared Geometry & File Name Sanitization", () => {
+
+    it("should compute circle geometry as a perfect circle using min(width, height)", () => {
+      // 16:9 widescreen
+      const { rx, ry, radiusPx } = getCircleGeometry(1280, 720, 0.1);
+      expect(rx).toBe(72);
+      expect(ry).toBe(72);
+      expect(radiusPx).toBe(72);
+
+      // Portrait
+      const portrait = getCircleGeometry(720, 1280, 0.15);
+      expect(portrait.rx).toBe(108);
+      expect(portrait.ry).toBe(108);
+    });
+
+    it("should compute arrow geometry correctly", () => {
+      const { x1, y1, x2, y2, length } = getArrowGeometry(1000, 500, 0.1, 0.2, 0.4, 0.6);
+      expect(x1).toBe(100);
+      expect(y1).toBe(100);
+      expect(x2).toBe(400);
+      expect(y2).toBe(300);
+      expect(length).toBe(Math.sqrt(300 * 300 + 200 * 200));
+    });
+
+    it("should compute text bounding box and wrap text correctly", () => {
+      const { boxWidth, boxHeight, fontSize, lines } = getTextGeometry(1000, 500, 0.5, 0.5, "normal", "Dette er en test af line wrap");
+      expect(fontSize).toBe(20);
+      expect(lines.length).toBeGreaterThanOrEqual(1);
+      expect(boxWidth).toBeGreaterThan(0);
+      expect(boxHeight).toBeGreaterThan(0);
+    });
+
+    it("should sanitize export file name with Danish character replacements", () => {
+      const name1 = sanitizeExportFileName("Træning og øvelse på Åen");
+      expect(name1).toBe("Traening_og_oevelse_paa_Aaen.mp4");
+
+      const name2 = sanitizeExportFileName("   Spiller 1 - Skud! ???   ");
+      expect(name2).toBe("Spiller_1_-_Skud.mp4");
+
+      // Reserved windows names handled
+      const name3 = sanitizeExportFileName("CON");
+      expect(name3).toBe("_CON.mp4");
     });
   });
 });

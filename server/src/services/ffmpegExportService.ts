@@ -9,6 +9,8 @@ import path from "path";
 import { ExportRequestMetadata } from "../types/exportTypes";
 import { exportJobService } from "./exportJobService";
 import { Annotation, FreezeAnnotation } from "../../../src/types";
+import { getCircleGeometry, getArrowGeometry, getTextGeometry } from "../../../shared/annotationGeometry";
+import { sanitizeExportFileName } from "../../../shared/exportSchema";
 
 // Active FFmpeg processes map for cancellation tracking
 const activeProcesses = new Map<string, import("child_process").ChildProcess>();
@@ -262,58 +264,43 @@ export class FfmpegExportService {
       if (a.type === "circle") {
         const cx = a.x * width;
         const cy = a.y * height;
-        const rx = a.radius * width;
-        const ry = a.radius * height;
+        const geom = getCircleGeometry(width, height, a.radius);
         const strokeWidth = a.thickness === "bold" ? 8 : 4;
         const dashStyle = a.thickness === "bold" ? "" : "stroke-dasharray: 8 8";
 
         svgContent += `
-          <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" 
+          <ellipse cx="${cx}" cy="${cy}" rx="${geom.rx}" ry="${geom.ry}" 
                    stroke="${colorHex}" stroke-width="${strokeWidth}" 
                    fill="rgba(255, 176, 32, 0.05)" style="${dashStyle}" />
         `;
       } else if (a.type === "arrow") {
-        const x1 = a.startX * width;
-        const y1 = a.startY * height;
-        const x2 = a.endX * width;
-        const y2 = a.endY * height;
+        const geom = getArrowGeometry(width, height, a.startX, a.startY, a.endX, a.endY);
 
         svgContent += `
-          <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
-                stroke="${colorHex}" stroke-width="6" 
+          <line x1="${geom.x1}" y1="${geom.y1}" x2="${geom.x2}" y2="${geom.y2}" 
+                stroke="${colorHex}" stroke-width="${geom.strokeWidth}" 
                 marker-end="url(#arrow-${a.color})" />
         `;
       } else if (a.type === "text") {
-        const lines = this.wrapText(a.text, 22);
-        const fontSize = a.size === "small" ? height * 0.03 : a.size === "large" ? height * 0.055 : height * 0.04;
-        const charWidth = fontSize * 0.52;
-        const paddingX = fontSize * 0.6;
-        const paddingY = fontSize * 0.45;
-        const maxLineLength = Math.max(...lines.map(l => l.length));
-
-        const boxWidth = maxLineLength * charWidth + paddingX * 2;
-        const boxHeight = lines.length * fontSize * 1.25 + paddingY * 2;
-
-        const rectX = a.x * width - boxWidth / 2;
-        const rectY = a.y * height - boxHeight / 2;
+        const geom = getTextGeometry(width, height, a.x, a.y, a.size, a.text);
 
         // Draw background rectangle
         svgContent += `
-          <rect x="${rectX}" y="${rectY}" width="${boxWidth}" height="${boxHeight}" 
-                rx="${fontSize * 0.22}" fill="rgba(0, 0, 0, 0.82)" />
+          <rect x="${geom.rectX}" y="${geom.rectY}" width="${geom.boxWidth}" height="${geom.boxHeight}" 
+                rx="${geom.fontSize * 0.22}" fill="rgba(0, 0, 0, 0.82)" />
         `;
 
         // Draw each line of text
-        for (let idx = 0; idx < lines.length; idx++) {
-          const lineY = rectY + paddingY + fontSize * 0.85 + idx * fontSize * 1.25;
-          const escapedLine = lines[idx]
+        for (let idx = 0; idx < geom.lines.length; idx++) {
+          const lineY = geom.rectY + geom.paddingY + geom.fontSize * 0.85 + idx * geom.fontSize * 1.25;
+          const escapedLine = geom.lines[idx]
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
 
           svgContent += `
             <text x="${a.x * width}" y="${lineY}" 
-                  font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" 
+                  font-family="Arial, Helvetica, sans-serif" font-size="${geom.fontSize}" 
                   fill="#FFFFFF" font-weight="bold" text-anchor="middle">
               ${escapedLine}
             </text>
@@ -584,10 +571,7 @@ export class FfmpegExportService {
         return sum + s.duration;
       }, 0);
 
-      const cleanProjTitle = metadata.projectId 
-        ? metadata.projectId.replace(/[^a-zA-Z0-9]/g, "_") 
-        : "coach_clip";
-      const finalFileName = `${cleanProjTitle}_export.mp4`;
+      const finalFileName = sanitizeExportFileName(metadata.projectId || "coach_clip");
 
       exportJobService.updateJob(jobId, {
         status: "completed",

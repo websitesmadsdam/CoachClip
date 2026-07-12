@@ -1,0 +1,11 @@
+node_modules
+dist
+tmp
+upload
+*.mp4
+*.png
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
