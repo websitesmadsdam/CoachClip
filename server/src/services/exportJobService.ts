@@ -4,18 +4,22 @@
  */
 
 import { ExportJob, ExportStatus, ExportStage } from "../types/exportTypes";
+import { config } from "../config";
 
 class ExportJobService {
   private jobs = new Map<string, ExportJob>();
 
   public createJob(jobId: string, projectId: string): ExportJob {
+    const ttlMs = config.outputTtlMinutes * 60 * 1000;
+    const now = Date.now();
     const job: ExportJob = {
       jobId,
       projectId,
       status: "queued",
       stage: "validating",
       progress: 0,
-      createdAt: Date.now(),
+      createdAt: now,
+      expiresAt: now + ttlMs,
     };
     this.jobs.set(jobId, job);
     return job;

@@ -6,14 +6,22 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { ExportRequestMetadata, ExportJob } from "../types/exportTypes";
+import { ExportRequestMetadata } from "../types/exportTypes";
 import { exportJobService } from "./exportJobService";
 import { Annotation } from "../../../src/types";
 
+// Active FFmpeg processes map for cancellation tracking
+const activeProcesses = new Map<string, any>();
+
 // Promisified helper to run spawn securely without a shell (immune to injection)
-function runProcess(command: string, args: string[]): Promise<string> {
+function runProcess(command: string, args: string[], jobId?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(command, args);
+    
+    if (jobId) {
+      activeProcesses.set(jobId, proc);
+    }
+
     let stdout = "";
     let stderr = "";
 
@@ -26,16 +34,41 @@ function runProcess(command: string, args: string[]): Promise<string> {
     });
 
     proc.on("close", (code) => {
+      if (jobId) {
+        activeProcesses.delete(jobId);
+      }
       if (code === 0) {
         resolve(stdout);
       } else {
         reject(new Error(`Command '${command} ${args.join(" ")}' failed (code ${code}). Stderr: ${stderr}`));
       }
     });
+
+    proc.on("error", (err) => {
+      if (jobId) {
+        activeProcesses.delete(jobId);
+      }
+      reject(err);
+    });
   });
 }
 
 export class FfmpegExportService {
+  // Cancel active job process
+  public static cancelJob(jobId: string): boolean {
+    const proc = activeProcesses.get(jobId);
+    if (proc) {
+      try {
+        proc.kill("SIGKILL");
+        activeProcesses.delete(jobId);
+        return true;
+      } catch (e) {
+        console.error(`Failed to kill active process for job ${jobId}:`, e);
+      }
+    }
+    return false;
+  }
+
   // Check if input video has audio
   public static async hasAudioStream(filePath: string): Promise<boolean> {
     try {
@@ -54,30 +87,53 @@ export class FfmpegExportService {
     }
   }
 
-  // Get dimensions of video
-  public static async getVideoDimensions(filePath: string): Promise<{ width: number; height: number; duration: number }> {
+  // Get FPS of video stream
+  public static async getVideoFps(filePath: string): Promise<number> {
     try {
       const output = await runProcess("ffprobe", [
         "-v", "error",
         "-select_streams", "v:0",
-        "-show_entries", "stream=width,height,duration",
+        "-show_entries", "stream=r_frame_rate",
         "-of", "json",
         filePath
       ]);
       const data = JSON.parse(output);
-      const stream = data.streams?.[0] || {};
-      return {
-        width: Number(stream.width || 1920),
-        height: Number(stream.height || 1080),
-        duration: Number(stream.duration || 0)
-      };
+      const rateStr = data.streams?.[0]?.r_frame_rate || "30/1";
+      const parts = rateStr.split("/");
+      if (parts.length === 2) {
+        const fps = Number(parts[0]) / Number(parts[1]);
+        if (fps > 0) return Math.round(fps * 100) / 100;
+      }
+      return 30;
     } catch (e) {
-      console.error("Failed to get video dimensions via ffprobe:", e);
-      return { width: 1920, height: 1080, duration: 0 };
+      console.error("Failed to get video FPS, defaulting to 30:", e);
+      return 30;
     }
   }
 
-  // Auto-wrap text to fits in the bounds
+  // Get dimensions of video (throws on failure)
+  public static async getVideoDimensions(filePath: string): Promise<{ width: number; height: number; duration: number }> {
+    const output = await runProcess("ffprobe", [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=width,height,duration",
+      "-of", "json",
+      filePath
+    ]);
+    const data = JSON.parse(output);
+    const stream = data.streams?.[0];
+    if (!stream || !stream.width || !stream.height) {
+      throw new Error("ffprobe: Missing valid video stream dimensions");
+    }
+    const duration = Number(stream.duration || 0);
+    return {
+      width: Number(stream.width),
+      height: Number(stream.height),
+      duration: duration
+    };
+  }
+
+  // Auto-wrap text to fit bounds
   private static wrapText(text: string, maxChars = 22): string[] {
     const words = text.split(" ");
     const lines: string[] = [];
@@ -95,7 +151,7 @@ export class FfmpegExportService {
     return lines;
   }
 
-  // Generate SVG overlay for a single annotation or multiple annotations
+  // Generate SVG overlay for annotations
   private static generateSvgOverlay(
     width: number,
     height: number,
@@ -170,7 +226,6 @@ export class FfmpegExportService {
         // Draw each line of text
         for (let idx = 0; idx < lines.length; idx++) {
           const lineY = rectY + paddingY + fontSize * 0.85 + idx * fontSize * 1.25;
-          // Escape HTML characters safely
           const escapedLine = lines[idx]
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -191,7 +246,7 @@ export class FfmpegExportService {
     return svgContent;
   }
 
-  // Orchestrate the background export process
+  // Orchestrate background export process
   public static async executeExport(
     jobId: string,
     metadata: ExportRequestMetadata,
@@ -205,10 +260,13 @@ export class FfmpegExportService {
     try {
       // 1. Probe source video metadata
       exportJobService.updateJob(jobId, { stage: "validating", progress: 5 });
-      const { width: rawW, height: rawH, duration: rawDur } = await this.getVideoDimensions(inputPath);
+      const { width: rawW, height: rawH } = await this.getVideoDimensions(inputPath);
       const hasAudio = await this.hasAudioStream(inputPath);
+      const fps = await this.getVideoFps(inputPath);
 
-      // 2. Compute Output Dimensions (max 1080p, preserve aspect ratio, even numbers)
+      console.log(`[ExportJob ${jobId}] Source detected: ${rawW}x${rawH}, FPS: ${fps}, Has Audio: ${hasAudio}`);
+
+      // 2. Compute Output Dimensions (max 1080p, preserve aspect, even numbers)
       let outW = rawW;
       let outH = rawH;
       if (rawW > 1920 || rawH > 1080) {
@@ -281,8 +339,8 @@ export class FfmpegExportService {
 
           // Filter active annotations for this range
           const activeAnnos = metadata.annotations.filter(
-            (a) => a.type !== "freeze" && !(a.endTime < seg.start || a.startTime > seg.end)
-          );
+            (a) => a.type !== "freeze" && !((a as any).endTime < seg.start || (a as any).startTime > seg.end)
+          ) as Exclude<Annotation, { type: "freeze" }>[];
 
           if (activeAnnos.length > 0) {
             // Render individual SVG for each active annotation to overlay with correct timing
@@ -308,62 +366,56 @@ export class FfmpegExportService {
             }
 
             const lastLabel = `v${activeAnnos.length}`;
-            const filterString = filterChains.join("; ") + `; [${lastLabel}]null[v_out]`;
+            let filterString = filterChains.join("; ") + `; [${lastLabel}]null[v_out]`;
 
             const finalArgs = [
-              ...overlayArgs,
-              "-filter_complex", filterString,
-              "-map", "[v_out]"
+              ...overlayArgs
             ];
 
             if (hasAudio) {
-              finalArgs.push("-map", "0:a", "-c:a", "aac", "-ar", "44100", "-ac", "2");
+              filterString += "; [0:a]aconvert=sample_rates=44100:channel_layouts=stereo[a_out]";
+              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac");
             } else {
-              // No audio source, inject silence
-              finalArgs.push(
-                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-                "-map", "1:a", "-c:a", "aac", "-shortest"
-              );
+              // Generate silent audio inline to bypass variable audio layout bugs
+              filterString += "; anullsrc=channel_layout=stereo:sample_rate=44100[a_out]";
+              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac", "-shortest");
             }
 
             finalArgs.push(
               "-c:v", "libx264",
               "-pix_fmt", "yuv420p",
-              "-r", "25",
+              "-r", String(fps),
               "-y",
               segOutFile
             );
 
-            await runProcess("ffmpeg", finalArgs);
+            await runProcess("ffmpeg", finalArgs, jobId);
           } else {
             // Plain video trim with downscale
-            const filterString = `[0:v]scale=${outW}:${outH}[v_out]`;
+            let filterString = `[0:v]scale=${outW}:${outH}[v_out]`;
             const finalArgs = [
               "-ss", String(seg.start),
               "-to", String(seg.end),
-              "-i", inputPath,
-              "-filter_complex", filterString,
-              "-map", "[v_out]"
+              "-i", inputPath
             ];
 
             if (hasAudio) {
-              finalArgs.push("-map", "0:a", "-c:a", "aac", "-ar", "44100", "-ac", "2");
+              filterString += "; [0:a]aconvert=sample_rates=44100:channel_layouts=stereo[a_out]";
+              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac");
             } else {
-              finalArgs.push(
-                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-                "-map", "1:a", "-c:a", "aac", "-shortest"
-              );
+              filterString += "; anullsrc=channel_layout=stereo:sample_rate=44100[a_out]";
+              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac", "-shortest");
             }
 
             finalArgs.push(
               "-c:v", "libx264",
               "-pix_fmt", "yuv420p",
-              "-r", "25",
+              "-r", String(fps),
               "-y",
               segOutFile
             );
 
-            await runProcess("ffmpeg", finalArgs);
+            await runProcess("ffmpeg", finalArgs, jobId);
           }
         } else if (seg.type === "freeze") {
           exportJobService.updateJob(jobId, {
@@ -380,7 +432,7 @@ export class FfmpegExportService {
             "-q:v", "2",
             "-y",
             imgFile
-          ]);
+          ], jobId);
 
           // 2. Identify active annotations at freeze time
           const activeAnnos = metadata.annotations.filter(
@@ -394,31 +446,32 @@ export class FfmpegExportService {
 
           // 4. Render freeze MP4 with silence and annotation burned in
           await runProcess("ffmpeg", [
-            "-loop", "1", "-i", imgFile,
-            "-i", svgPath,
-            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-            "-filter_complex", `[0:v]scale=${outW}:${outH}[v0]; [v0][1:v]overlay=0:0[v_out]`,
-            "-map", "[v_out]",
-            "-map", "2:a",
+            "-loop", "1",
             "-t", String(seg.duration),
+            "-i", imgFile,
+            "-i", svgPath,
+            "-filter_complex", `[0:v]scale=${outW}:${outH}[v0]; [v0][1:v]overlay=0:0[v_out]; anullsrc=channel_layout=stereo:sample_rate=44100[a_out]`,
+            "-map", "[v_out]",
+            "-map", "[a_out]",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
-            "-r", "25",
+            "-r", String(fps),
             "-c:a", "aac",
             "-ar", "44100",
             "-ac", "2",
+            "-shortest",
             "-y",
             segOutFile
-          ]);
+          ], jobId);
         }
 
         segmentFiles.push(segOutFile);
       }
 
-      // 6. Concatenate all generated segment MP4s
+      // 6. Concatenate all generated segment MP4s using absolute path resolution
       exportJobService.updateJob(jobId, { stage: "encoding", progress: 90 });
       const concatListFile = path.join(jobTmpDir, "concat_list.txt");
-      const concatLines = segmentFiles.map((f) => `file '${f.replace(/\\/g, "/")}'`).join("\n");
+      const concatLines = segmentFiles.map((f) => `file '${path.resolve(f).replace(/\\/g, "/")}'`).join("\n");
       fs.writeFileSync(concatListFile, concatLines);
 
       await runProcess("ffmpeg", [
@@ -428,7 +481,7 @@ export class FfmpegExportService {
         "-c", "copy",
         "-y",
         outputPath
-      ]);
+      ], jobId);
 
       // 7. Complete job & final details
       exportJobService.updateJob(jobId, { stage: "finalizing", progress: 98 });
@@ -438,7 +491,6 @@ export class FfmpegExportService {
         return sum + s.duration;
       }, 0);
 
-      // Clean Danish normalized file name
       const cleanProjTitle = metadata.projectId 
         ? metadata.projectId.replace(/[^a-zA-Z0-9]/g, "_") 
         : "coach_clip";
@@ -453,7 +505,7 @@ export class FfmpegExportService {
           size: outputStats.size,
           duration: outputDuration,
           downloadUrl: `/api/exports/${jobId}/download`,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 60 mins TTL
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
         }
       });
     } catch (err: any) {
@@ -464,7 +516,17 @@ export class FfmpegExportService {
         userMessage: "Klippet kunne ikke oprettes. Projektet og dine markeringer er dog stadig gemt."
       });
     } finally {
-      // 8. Clean up temporary files inside job-specific directory
+      // Clean up the uploaded raw source video file immediately to conserve host disk space
+      if (fs.existsSync(inputPath)) {
+        try {
+          fs.unlinkSync(inputPath);
+          console.log(`[ExportJob ${jobId}] Successfully deleted raw input source file to save space.`);
+        } catch (e) {
+          console.error(`Failed to delete raw input source video file:`, e);
+        }
+      }
+
+      // Clean up temporary segment files inside job-specific directory
       try {
         fs.rmSync(jobTmpDir, { recursive: true, force: true });
       } catch (e) {

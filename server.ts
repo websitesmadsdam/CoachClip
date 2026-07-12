@@ -5,18 +5,21 @@
 
 import express from "express";
 import path from "path";
+import { execSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { exportRouter } from "./server/src/routes/exportRoutes";
 import { FileCleanupService } from "./server/src/services/fileCleanupService";
+import { config, validateConfig } from "./server/src/config";
 
 async function startServer() {
-  const app = express();
-  const PORT = 3000;
+  // Validate configuration before starting
+  validateConfig();
 
-  // Initialize background temp file cleanup task (clean files older than 60 minutes)
-  const tempDir = process.env.TEMP_DIR || "./tmp";
-  const ttlMinutes = Number(process.env.OUTPUT_TTL_MINUTES || "60");
-  FileCleanupService.initialize(tempDir, ttlMinutes);
+  const app = express();
+  const PORT = config.port;
+
+  // Initialize background temp file cleanup task (clean files older than configured minutes)
+  FileCleanupService.initialize(config.tempDir, config.outputTtlMinutes);
 
   // Parse JSON payloads safely
   app.use(express.json());
@@ -25,7 +28,40 @@ async function startServer() {
   app.use("/api/exports", exportRouter);
 
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", service: "CoachClip MVP Renderer" });
+    let ffmpegOk = false;
+    let ffprobeOk = false;
+    let ffmpegVersion = "unknown";
+    
+    try {
+      const out = execSync("ffmpeg -version").toString();
+      ffmpegOk = true;
+      ffmpegVersion = out.split("\n")[0] || "unknown";
+    } catch (e) {
+      console.error("FFmpeg healthcheck failed:", e);
+    }
+
+    try {
+      execSync("ffprobe -version");
+      ffprobeOk = true;
+    } catch (e) {
+      console.error("FFprobe healthcheck failed:", e);
+    }
+
+    res.json({
+      status: "ok",
+      ffmpeg: ffmpegOk,
+      ffprobe: ffprobeOk,
+      version: ffmpegVersion,
+      service: "CoachClip MVP Renderer"
+    });
+  });
+
+  // Explicit fallback for any unhandled /api/ paths to avoid returning index.html
+  app.all("/api/*all", (req, res) => {
+    res.status(404).json({
+      error: "NOT_FOUND",
+      message: "API-ressourcen blev ikke fundet."
+    });
   });
 
   // Serve static assets or mount Vite dev middleware
@@ -43,8 +79,8 @@ async function startServer() {
     // Serve static files from the build output directory
     app.use(express.static(distPath));
     
-    // SPA fallback: render index.html for other paths
-    app.get("*", (req, res) => {
+    // SPA fallback: render index.html for other paths (using Express 5 *all named wildcard)
+    app.get("*all", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

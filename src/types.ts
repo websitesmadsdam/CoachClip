@@ -34,6 +34,7 @@ export type CoachClipProject = {
   feedbackType?: "positive" | "development";
   collectionId?: string;
   exportStatus?: ExportStatus; // backward compatibility
+  exportedVideoUrl?: string; // backward compatibility
   export?: {
     jobId?: string;
     status: ExportStatus;

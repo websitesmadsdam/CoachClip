@@ -12,12 +12,12 @@ import { exportJobService } from "../services/exportJobService";
 import { FfmpegExportService } from "../services/ffmpegExportService";
 import { ExportRequestMetadata } from "../types/exportTypes";
 
+import { config } from "../config";
+
 export const exportRouter = Router();
 
-// Configure safe local storage engine with randomized filenames
-const TEMP_DIR = process.env.TEMP_DIR || "./tmp";
-const uploadsDir = path.join(TEMP_DIR, "uploads");
-const exportsDir = path.join(TEMP_DIR, "exports");
+const uploadsDir = path.join(config.tempDir, "uploads");
+const exportsDir = path.join(config.tempDir, "exports");
 
 fs.mkdirSync(uploadsDir, { recursive: true });
 fs.mkdirSync(exportsDir, { recursive: true });
@@ -36,7 +36,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 2 * 1024 * 1024 * 1024, // 2 GB limit
+    fileSize: config.maxUploadBytes,
   },
 });
 
@@ -49,7 +49,7 @@ const getOrigin = (req: Request) => {
 };
 
 // 1. Create Export Job Endpoint
-exportRouter.post("/", upload.single("video"), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+exportRouter.post("/", upload.single("video"), async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
   const file = req.file;
   const metadataStr = req.body.metadata;
 
@@ -59,9 +59,15 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
   }
 
   if (!metadataStr) {
-    // Delete file immediately if metadata is missing
     fs.unlinkSync(file.path);
     res.status(400).json({ error: "MISSING_METADATA", message: "Projektdetaljer og metadata mangler." });
+    return;
+  }
+
+  // Enforce metadata payload size limit (safety constraint)
+  if (metadataStr.length > 500 * 1024) { // 500 KB limit
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "METADATA_TOO_LARGE", message: "Metadata payload er for stor." });
     return;
   }
 
@@ -74,27 +80,6 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
     return;
   }
 
-  // Validate clip duration limit (max 90s)
-  const clipDuration = metadata.clip.endTime - metadata.clip.startTime;
-  if (clipDuration > 90) {
-    fs.unlinkSync(file.path);
-    res.status(400).json({
-      error: "CLIP_TOO_LONG",
-      message: "Det valgte klip kan højst være 90 sekunder i denne version.",
-    });
-    return;
-  }
-
-  // Validate file size limit (max 2 GB)
-  if (file.size > 2 * 1024 * 1024 * 1024) {
-    fs.unlinkSync(file.path);
-    res.status(400).json({
-      error: "FILE_TOO_LARGE",
-      message: "Videofilen er større end de 2 GB, som CoachClip understøtter i denne version.",
-    });
-    return;
-  }
-
   // Validate file extension (must be mp4 or mov)
   const ext = path.extname(file.originalname).toLowerCase();
   if (ext !== ".mp4" && ext !== ".mov") {
@@ -103,6 +88,184 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
       error: "UNSUPPORTED_FORMAT",
       message: "Videoen kunne ikke behandles. Prøv en MP4- eller MOV-video med H.264- eller HEVC-video.",
     });
+    return;
+  }
+
+  // Validate uploaded file size with config
+  if (file.size > config.maxUploadBytes) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({
+      error: "FILE_TOO_LARGE",
+      message: "Videofilen er større end den tilladte filstørrelse.",
+    });
+    return;
+  }
+
+  // Validate the video file with ffprobe to reject unreadable/corrupted files
+  let videoMeta;
+  try {
+    videoMeta = await FfmpegExportService.getVideoDimensions(file.path);
+  } catch (err) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({
+      error: "INVALID_VIDEO_FILE",
+      message: "Videofilen kunne ikke læses af systemet. Sørg for, at det er en gyldig MP4- eller MOV-video."
+    });
+    return;
+  }
+
+  if (!videoMeta || videoMeta.duration <= 0 || !videoMeta.width || !videoMeta.height) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({
+      error: "INVALID_VIDEO_METADATA",
+      message: "Videoen mangler gyldige strømme eller varighedsoplysninger."
+    });
+    return;
+  }
+
+  // Validate clip boundaries
+  if (typeof metadata.clip?.startTime !== "number" || typeof metadata.clip?.endTime !== "number") {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "INVALID_CLIP", message: "Ugyldige klipgrænser defineret." });
+    return;
+  }
+
+  const clipDuration = metadata.clip.endTime - metadata.clip.startTime;
+  if (metadata.clip.startTime < 0) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "INVALID_START_TIME", message: "Starttidspunktet kan ikke være negativt." });
+    return;
+  }
+
+  if (clipDuration < 0.5) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "CLIP_TOO_SHORT", message: "Det valgte klip skal være mindst 0,5 sekunder." });
+    return;
+  }
+
+  if (clipDuration > config.maxClipDurationSeconds) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({
+      error: "CLIP_TOO_LONG",
+      message: `Det valgte klip kan højst være ${config.maxClipDurationSeconds} sekunder i denne version.`,
+    });
+    return;
+  }
+
+  // 0.5s tolerance for end of video boundary check
+  if (metadata.clip.endTime > videoMeta.duration + 0.5) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({
+      error: "INVALID_END_TIME",
+      message: "Sluttidspunktet ligger ud over videoens faktiske varighed."
+    });
+    return;
+  }
+
+  // Validate annotations constraints
+  if (!Array.isArray(metadata.annotations)) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "INVALID_ANNOTATIONS", message: "Annotationer skal leveres som et array." });
+    return;
+  }
+
+  if (metadata.annotations.length > 100) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "TOO_MANY_ANNOTATIONS", message: "Der kan højst tilføjes 100 annotationer pr. klip." });
+    return;
+  }
+
+  let textCount = 0;
+  let svgCount = 0;
+  let totalFreezeDuration = 0;
+
+  for (const a of metadata.annotations) {
+    if (!a.type) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: "INVALID_ANNOTATION", message: "En annotation mangler en type." });
+      return;
+    }
+
+    if (a.type === "text") {
+      textCount++;
+      if (typeof a.text !== "string" || a.text.length > 120) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "TEXT_TOO_LONG", message: "En tekstannotation må højst indeholde 120 tegn." });
+        return;
+      }
+      if (a.startTime < 0 || a.endTime < a.startTime || a.startTime > metadata.clip.endTime || a.endTime < metadata.clip.startTime) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_ANNOTATION_TIME", message: "En tekstannotation har ugyldige tidsgrænser." });
+        return;
+      }
+      if (a.x < 0 || a.x > 1 || a.y < 0 || a.y > 1) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_COORDINATES", message: "Koordinater skal være mellem 0 og 1." });
+        return;
+      }
+    } else if (a.type === "circle") {
+      svgCount++;
+      if (a.startTime < 0 || a.endTime < a.startTime || a.startTime > metadata.clip.endTime || a.endTime < metadata.clip.startTime) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_ANNOTATION_TIME", message: "En cirkelannotation har ugyldige tidsgrænser." });
+        return;
+      }
+      if (a.x < 0 || a.x > 1 || a.y < 0 || a.y > 1) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_COORDINATES", message: "Koordinater skal være mellem 0 og 1." });
+        return;
+      }
+      if (a.radius <= 0 || a.radius > 1) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_RADIUS", message: "Radius skal være mellem 0 og 1." });
+        return;
+      }
+    } else if (a.type === "arrow") {
+      svgCount++;
+      if (a.startTime < 0 || a.endTime < a.startTime || a.startTime > metadata.clip.endTime || a.endTime < metadata.clip.startTime) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_ANNOTATION_TIME", message: "En pilannotation har ugyldige tidsgrænser." });
+        return;
+      }
+      if (a.startX < 0 || a.startX > 1 || a.startY < 0 || a.startY > 1 || a.endX < 0 || a.endX > 1 || a.endY < 0 || a.endY > 1) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_COORDINATES", message: "Pilespidskoordinater skal være mellem 0 og 1." });
+        return;
+      }
+    } else if (a.type === "freeze") {
+      if (a.time < metadata.clip.startTime || a.time > metadata.clip.endTime) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_FREEZE_TIME", message: "Frysepunktet ligger uden for klippets tidsramme." });
+        return;
+      }
+      if (a.duration !== 2 && a.duration !== 3 && a.duration !== 5) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: "INVALID_FREEZE_DURATION", message: "Varighed af frysebillede skal være 2, 3 eller 5 sekunder." });
+        return;
+      }
+      totalFreezeDuration += a.duration;
+    } else {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: "INVALID_TYPE", message: "Ugyldig annotationstype fundet." });
+      return;
+    }
+  }
+
+  if (textCount > 50) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "TOO_MANY_TEXTS", message: "Du kan højst tilføje 50 tekstannotationer." });
+    return;
+  }
+
+  if (svgCount > 50) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "TOO_MANY_SVGS", message: "Du kan højst tilføje 50 geometriske markeringer (cirkler/pile)." });
+    return;
+  }
+
+  if (totalFreezeDuration > 30) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "TOO_MUCH_FREEZE", message: "Den samlede frysetid må højst være 30 sekunder." });
     return;
   }
 
@@ -118,7 +281,7 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
   });
 
   // Start processing asynchronously in background
-  FfmpegExportService.executeExport(jobId, metadata, file.path, outputFilePath, TEMP_DIR)
+  FfmpegExportService.executeExport(jobId, metadata, file.path, outputFilePath, config.tempDir)
     .catch((err) => {
       console.error(`Export Job ${jobId} failed inside Express router:`, err);
     });
@@ -132,7 +295,11 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
 
 // 2. Query Export Job Status Endpoint
 exportRouter.get("/:jobId", (req: Request, res: Response) => {
-  const { jobId } = req.params;
+  const jobId = req.params.jobId;
+  if (typeof jobId !== "string") {
+    res.status(400).json({ error: "INVALID_JOB_ID", message: "Ugyldigt job ID" });
+    return;
+  }
   const job = exportJobService.getJob(jobId);
 
   if (!job) {
@@ -158,7 +325,11 @@ exportRouter.get("/:jobId", (req: Request, res: Response) => {
 
 // 3. Download Processed Video Endpoint
 exportRouter.get("/:jobId/download", (req: Request, res: Response) => {
-  const { jobId } = req.params;
+  const jobId = req.params.jobId;
+  if (typeof jobId !== "string") {
+    res.status(400).json({ error: "INVALID_JOB_ID", message: "Ugyldigt job ID" });
+    return;
+  }
   const job = exportJobService.getJob(jobId);
 
   if (!job) {
@@ -194,13 +365,20 @@ exportRouter.get("/:jobId/download", (req: Request, res: Response) => {
 
 // 4. Cancel/Delete Export Job Endpoint
 exportRouter.delete("/:jobId", (req: Request, res: Response) => {
-  const { jobId } = req.params;
+  const jobId = req.params.jobId;
+  if (typeof jobId !== "string") {
+    res.status(400).json({ error: "INVALID_JOB_ID", message: "Ugyldigt job ID" });
+    return;
+  }
   const job = exportJobService.getJob(jobId);
 
   if (!job) {
     res.status(404).json({ error: "NOT_FOUND", message: "Eksportjobbet blev ikke fundet." });
     return;
   }
+
+  // Cancel active FFmpeg process if any is running
+  FfmpegExportService.cancelJob(jobId);
 
   // Delete associated files
   if (job.inputFilePath && fs.existsSync(job.inputFilePath)) {
