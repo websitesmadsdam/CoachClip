@@ -7,6 +7,7 @@ import { Annotation } from "./annotations";
 
 export type ExportRequestMetadata = {
   projectId: string;
+  projectTitle: string;
   clip: {
     startTime: number;
     endTime: number;
@@ -26,7 +27,7 @@ export type ExportRequestMetadata = {
 };
 
 export function sanitizeExportFileName(title: string): string {
-  if (!title) return "coachclip_export.mp4";
+  if (!title || !title.trim()) return "CoachClip.mp4";
 
   // Replace Danish characters specifically
   let cleaned = title
@@ -37,11 +38,22 @@ export function sanitizeExportFileName(title: string): string {
     .replace(/å/g, "aa")
     .replace(/Å/g, "Aa");
 
-  // Keep only alphanumeric, spaces, dashes, and underscores
+  // Keep only alphanumeric characters, spaces, dashes and underscores
   cleaned = cleaned.replace(/[^a-zA-Z0-9\s-_]/g, "");
 
   // Normalize whitespace to single underscore
   cleaned = cleaned.trim().replace(/\s+/g, "_");
+
+  // Collapse multiple underscores to single underscore
+  cleaned = cleaned.replace(/_+/g, "_");
+
+  // Limit name to 80 characters including .mp4 (which is 4 chars)
+  if (cleaned.length > 76) {
+    cleaned = cleaned.substring(0, 76);
+  }
+
+  // Remove trailing/leading underscores
+  cleaned = cleaned.replace(/^_+|_+$/g, "");
 
   // Avoid Windows reserved names
   const reserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
@@ -49,13 +61,9 @@ export function sanitizeExportFileName(title: string): string {
     cleaned = "_" + cleaned;
   }
 
-  // Max 80 characters
-  if (cleaned.length > 76) {
-    cleaned = cleaned.substring(0, 76);
-  }
-
-  if (!cleaned) {
-    cleaned = "export";
+  // Handle empty or whitespace-only results
+  if (!cleaned || cleaned === "_" || cleaned.trim() === "") {
+    return "CoachClip.mp4";
   }
 
   return `${cleaned}.mp4`;

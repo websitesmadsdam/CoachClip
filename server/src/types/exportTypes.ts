@@ -6,8 +6,6 @@
 import { Annotation } from "../../../src/types";
 
 export type ExportStatus =
-  | "not_exported"
-  | "uploading"
   | "queued"
   | "processing"
   | "completed"
@@ -16,12 +14,15 @@ export type ExportStatus =
   | "expired";
 
 export type ExportStage =
+  | "waiting"
   | "validating"
   | "trimming"
   | "rendering_annotations"
   | "rendering_freezes"
+  | "concatenating"
   | "encoding"
-  | "finalizing";
+  | "finalizing"
+  | "completed";
 
 export type ExportJob = {
   jobId: string;
@@ -46,6 +47,7 @@ export type ExportJob = {
 
 export type ExportRequestMetadata = {
   projectId: string;
+  projectTitle: string;
   clip: {
     startTime: number;
     endTime: number;

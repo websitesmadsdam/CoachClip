@@ -11,6 +11,7 @@ export type AppConfig = {
   outputTtlMinutes: number;
   maxUploadBytes: number;
   maxClipDurationSeconds: number;
+  ffmpegTimeoutSeconds: number;
   corsOrigin: string;
   exportApiUrl?: string;
 };
@@ -25,6 +26,7 @@ export const config: AppConfig = {
   outputTtlMinutes: Number(getEnv("OUTPUT_TTL_MINUTES", "60")),
   maxUploadBytes: Number(getEnv("MAX_UPLOAD_BYTES", String(2 * 1024 * 1024 * 1024))), // 2 GB
   maxClipDurationSeconds: Number(getEnv("MAX_CLIP_DURATION_SECONDS", "90")), // 90s
+  ffmpegTimeoutSeconds: Number(getEnv("FFMPEG_TIMEOUT_SECONDS", "600")),
   corsOrigin: getEnv("CORS_ORIGIN", "*"),
   exportApiUrl: process.env.VITE_EXPORT_API_URL
 };
@@ -41,5 +43,8 @@ export function validateConfig() {
   }
   if (isNaN(config.maxClipDurationSeconds) || config.maxClipDurationSeconds <= 0) {
     throw new Error("INVALID_CONFIG: MAX_CLIP_DURATION_SECONDS must be a positive number");
+  }
+  if (isNaN(config.ffmpegTimeoutSeconds) || config.ffmpegTimeoutSeconds <= 0) {
+    throw new Error("INVALID_CONFIG: FFMPEG_TIMEOUT_SECONDS must be a positive number");
   }
 }

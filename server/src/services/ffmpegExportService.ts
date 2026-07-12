@@ -11,13 +11,19 @@ import { exportJobService } from "./exportJobService";
 import { Annotation, FreezeAnnotation } from "../../../src/types";
 import { getCircleGeometry, getArrowGeometry, getTextGeometry } from "../../../shared/annotationGeometry";
 import { sanitizeExportFileName } from "../../../shared/exportSchema";
+import { config } from "../config";
 
 // Active FFmpeg processes map for cancellation tracking
 const activeProcesses = new Map<string, import("child_process").ChildProcess>();
+const cancelledJobs = new Set<string>();
 
 // Promisified helper to run spawn securely without a shell (immune to injection)
-function runProcess(command: string, args: string[], jobId?: string): Promise<string> {
+function runProcess(command: string, args: string[], jobId?: string, timeoutSeconds?: number): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (jobId && FfmpegExportService.isCancelled(jobId)) {
+      return reject(new Error("Job cancelled"));
+    }
+
     const proc = spawn(command, args);
     
     if (jobId) {
@@ -26,6 +32,19 @@ function runProcess(command: string, args: string[], jobId?: string): Promise<st
 
     let stdout = "";
     let stderr = "";
+
+    let timer: NodeJS.Timeout | undefined;
+    const actualTimeout = timeoutSeconds ?? config.ffmpegTimeoutSeconds;
+    if (actualTimeout && actualTimeout > 0) {
+      timer = setTimeout(() => {
+        console.error(`[runProcess] Command timed out after ${actualTimeout}s: ${command} ${args.join(" ")}`);
+        proc.kill("SIGKILL");
+        if (jobId) {
+          activeProcesses.delete(jobId);
+        }
+        reject(new Error("FFMPEG_TIMEOUT"));
+      }, actualTimeout * 1000);
+    }
 
     proc.stdout.on("data", (data) => {
       stdout += data.toString();
@@ -36,17 +55,23 @@ function runProcess(command: string, args: string[], jobId?: string): Promise<st
     });
 
     proc.on("close", (code) => {
+      if (timer) clearTimeout(timer);
       if (jobId) {
         activeProcesses.delete(jobId);
       }
       if (code === 0) {
         resolve(stdout);
       } else {
-        reject(new Error(`Command '${command} ${args.join(" ")}' failed (code ${code}). Stderr: ${stderr}`));
+        if (jobId && FfmpegExportService.isCancelled(jobId)) {
+          reject(new Error("Job cancelled"));
+        } else {
+          reject(new Error(`Command '${command} ${args.join(" ")}' failed (code ${code}). Stderr: ${stderr}`));
+        }
       }
     });
 
     proc.on("error", (err) => {
+      if (timer) clearTimeout(timer);
       if (jobId) {
         activeProcesses.delete(jobId);
       }
@@ -56,13 +81,33 @@ function runProcess(command: string, args: string[], jobId?: string): Promise<st
 }
 
 export class FfmpegExportService {
-  // Cancel active job process
-  public static cancelJob(jobId: string): boolean {
+  public static isCancelled(jobId: string): boolean {
+    return cancelledJobs.has(jobId);
+  }
+
+  // Cancel active job process with SIGTERM -> SIGKILL fallback
+  public static async cancelJob(jobId: string): Promise<boolean> {
+    cancelledJobs.add(jobId);
     const proc = activeProcesses.get(jobId);
     if (proc) {
       try {
-        proc.kill("SIGKILL");
-        activeProcesses.delete(jobId);
+        console.log(`[FfmpegExportService] Sending SIGTERM to process for job ${jobId}`);
+        proc.kill("SIGTERM");
+
+        // Wait up to 3 seconds for it to exit
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 100));
+          if (!activeProcesses.has(jobId)) {
+            console.log(`[FfmpegExportService] Process for job ${jobId} terminated cleanly via SIGTERM`);
+            break;
+          }
+        }
+
+        if (activeProcesses.has(jobId)) {
+          console.log(`[FfmpegExportService] Process for job ${jobId} did not exit. Sending SIGKILL.`);
+          proc.kill("SIGKILL");
+          activeProcesses.delete(jobId);
+        }
         return true;
       } catch (e) {
         console.error(`Failed to kill active process for job ${jobId}:`, e);
@@ -393,6 +438,10 @@ export class FfmpegExportService {
       const totalSteps = segments.length;
 
       for (let i = 0; i < segments.length; i++) {
+        if (FfmpegExportService.isCancelled(jobId)) {
+          throw new Error("Job cancelled");
+        }
+
         const seg = segments[i];
         const segOutFile = path.join(jobTmpDir, `seg_${i}.mp4`);
         const segProgressBase = 10 + Math.round((i / totalSteps) * 75);
@@ -548,6 +597,10 @@ export class FfmpegExportService {
         segmentFiles.push(segOutFile);
       }
 
+      if (FfmpegExportService.isCancelled(jobId)) {
+        throw new Error("Job cancelled");
+      }
+
       // 6. Concatenate all generated segment MP4s using absolute path resolution
       exportJobService.updateJob(jobId, { stage: "encoding", progress: 90 });
       const concatListFile = path.join(jobTmpDir, "concat_list.txt");
@@ -563,6 +616,10 @@ export class FfmpegExportService {
         outputPath
       ], jobId);
 
+      if (FfmpegExportService.isCancelled(jobId)) {
+        throw new Error("Job cancelled");
+      }
+
       // 7. Complete job & final details
       exportJobService.updateJob(jobId, { stage: "finalizing", progress: 98 });
       const outputStats = fs.statSync(outputPath);
@@ -571,27 +628,49 @@ export class FfmpegExportService {
         return sum + s.duration;
       }, 0);
 
-      const finalFileName = sanitizeExportFileName(metadata.projectId || "coach_clip");
+      const finalFileName = sanitizeExportFileName(metadata.projectTitle || "CoachClip");
+
+      const completedAt = Date.now();
+      const expiresAtMs = completedAt + (config.outputTtlMinutes * 60 * 1000);
+      const expiresAtIso = new Date(expiresAtMs).toISOString();
 
       exportJobService.updateJob(jobId, {
         status: "completed",
-        stage: "finalizing",
+        stage: "completed",
         progress: 100,
+        expiresAt: expiresAtMs,
         output: {
           fileName: finalFileName,
           size: outputStats.size,
           duration: outputDuration,
           downloadUrl: `/api/exports/${jobId}/download`,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+          expiresAt: expiresAtIso
         }
       });
     } catch (err: unknown) {
-      console.error(`Export Job ${jobId} failed with error:`, err);
-      exportJobService.updateJob(jobId, {
-        status: "failed",
-        errorCode: "FFMPEG_ERROR",
-        userMessage: "Klippet kunne ikke oprettes. Projektet og dine markeringer er dog stadig gemt."
-      });
+      if (FfmpegExportService.isCancelled(jobId)) {
+        console.log(`[ExportJob ${jobId}] Execution caught cancellation. Ensuring status remains cancelled.`);
+        exportJobService.updateJob(jobId, {
+          status: "cancelled"
+        });
+      } else {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`Export Job ${jobId} failed with error:`, err);
+        
+        if (errMsg === "FFMPEG_TIMEOUT") {
+          exportJobService.updateJob(jobId, {
+            status: "failed",
+            errorCode: "FFMPEG_TIMEOUT",
+            userMessage: "Klippet tog for lang tid at behandle. Prøv et kortere klip eller en mindre video."
+          });
+        } else {
+          exportJobService.updateJob(jobId, {
+            status: "failed",
+            errorCode: "FFMPEG_ERROR",
+            userMessage: "Klippet kunne ikke oprettes. Projektet og dine markeringer er dog stadig gemt."
+          });
+        }
+      }
     } finally {
       // Clean up the uploaded raw source video file immediately to conserve host disk space
       if (fs.existsSync(inputPath)) {
@@ -600,6 +679,19 @@ export class FfmpegExportService {
           console.log(`[ExportJob ${jobId}] Successfully deleted raw input source file to save space.`);
         } catch (e) {
           console.error(`Failed to delete raw input source video file:`, e);
+        }
+      }
+
+      // If job is cancelled or failed, delete partial output file
+      const finalJob = exportJobService.getJob(jobId);
+      if (finalJob && (finalJob.status === "cancelled" || finalJob.status === "failed")) {
+        if (fs.existsSync(outputPath)) {
+          try {
+            fs.unlinkSync(outputPath);
+            console.log(`[ExportJob ${jobId}] Deleted partial output file due to non-completed status.`);
+          } catch (e) {
+            console.warn(`[ExportJob ${jobId}] Failed to delete partial output file:`, e);
+          }
         }
       }
 

@@ -197,5 +197,55 @@ describe("CoachClip Backend MVP - Unit Tests", () => {
       const name3 = sanitizeExportFileName("CON");
       expect(name3).toBe("_CON.mp4");
     });
+
+    it("should sanitize export file name containing apostrophes, path traversal, very long names, empty titles, and reserved names", () => {
+      // Apostrophe
+      expect(sanitizeExportFileName("Spillerens' skud")).toBe("Spillerens_skud.mp4");
+      
+      // Path traversal
+      expect(sanitizeExportFileName("../../etc/passwd")).toBe("etcpasswd.mp4");
+      expect(sanitizeExportFileName("test/../../../file")).toBe("testfile.mp4");
+      expect(sanitizeExportFileName("C:\\Windows\\system32")).toBe("CWindowssystem32.mp4");
+
+      // Very long name
+      const longTitle = "a".repeat(200);
+      const sanitizedLong = sanitizeExportFileName(longTitle);
+      expect(sanitizedLong.length).toBeLessThanOrEqual(80);
+      expect(sanitizedLong.endsWith(".mp4")).toBe(true);
+
+      // Empty title
+      expect(sanitizeExportFileName("")).toBe("CoachClip.mp4");
+      expect(sanitizeExportFileName("   ")).toBe("CoachClip.mp4");
+
+      // Windows reserved names
+      expect(sanitizeExportFileName("PRN")).toBe("_PRN.mp4");
+      expect(sanitizeExportFileName("AUX")).toBe("_AUX.mp4");
+      expect(sanitizeExportFileName("NUL")).toBe("_NUL.mp4");
+    });
+  });
+
+  describe("State Combination Validations", () => {
+    it("should reject illegal state and stage combinations on transition", () => {
+      const jobId = "test-illegal-123";
+      exportJobService.createJob(jobId, "proj-1");
+
+      // Legal processing transitions
+      exportJobService.transitionJob(jobId, { status: "processing", stage: "validating" });
+      
+      // Illegal combination 1: status=queued, stage=rendering_annotations
+      expect(() => {
+        exportJobService.transitionJob(jobId, { status: "queued", stage: "rendering_annotations" });
+      }).toThrow();
+
+      // Illegal combination 2: status=completed, stage=validating
+      expect(() => {
+        exportJobService.transitionJob(jobId, { status: "completed", stage: "validating" });
+      }).toThrow();
+
+      // Illegal combination 3: status=processing, stage=completed
+      expect(() => {
+        exportJobService.transitionJob(jobId, { status: "processing", stage: "completed" });
+      }).toThrow();
+    });
   });
 });

@@ -38,8 +38,10 @@ export class FileCleanupService {
     // Clean up jobs map & expired export files
     const allJobs = exportJobService.getAllJobs();
     for (const job of allJobs) {
-      const isExpired = job.createdAt + ttlMs < now;
-      if (isExpired || job.status === "failed" || job.status === "cancelled") {
+      const expiresAt = job.expiresAt ?? (job.createdAt + ttlMs);
+      const isExpired = now >= expiresAt;
+
+      if (isExpired && job.status === "completed") {
         // Delete output file if exists
         if (job.outputFilePath && fs.existsSync(job.outputFilePath)) {
           try {
@@ -48,7 +50,7 @@ export class FileCleanupService {
             console.error(`Failed to delete output file ${job.outputFilePath}:`, e);
           }
         }
-        // Delete input file if exists and we are done
+        // Delete input file if exists
         if (job.inputFilePath && fs.existsSync(job.inputFilePath)) {
           try {
             fs.unlinkSync(job.inputFilePath);
@@ -56,11 +58,24 @@ export class FileCleanupService {
             console.error(`Failed to delete input file ${job.inputFilePath}:`, e);
           }
         }
-        // If expired, set job status
-        if (isExpired && job.status === "completed") {
-          exportJobService.updateJob(job.jobId, { status: "expired" });
-        } else if (job.status === "failed" || job.status === "cancelled") {
-          // Keep job record briefly, but remove files
+        // Set job status
+        exportJobService.updateJob(job.jobId, { status: "expired" });
+      } else if (job.status === "failed" || job.status === "cancelled" || job.status === "expired") {
+        // Delete output file if exists
+        if (job.outputFilePath && fs.existsSync(job.outputFilePath)) {
+          try {
+            fs.unlinkSync(job.outputFilePath);
+          } catch (e) {
+            console.warn(`Failed to delete output file during cleanup:`, e);
+          }
+        }
+        // Delete input file if exists
+        if (job.inputFilePath && fs.existsSync(job.inputFilePath)) {
+          try {
+            fs.unlinkSync(job.inputFilePath);
+          } catch (e) {
+            console.warn(`Failed to delete input file during cleanup:`, e);
+          }
         }
       }
     }
@@ -68,6 +83,10 @@ export class FileCleanupService {
     // Direct folder cleanup for orphaned files (safety fallback)
     this.cleanFolderOfOldFiles(uploadsDir, ttlMs);
     this.cleanFolderOfOldFiles(exportsDir, ttlMs);
+
+    // Clean up orphaned job directories under tmp/jobs/
+    const jobsParentDir = path.join(path.dirname(uploadsDir), "jobs");
+    this.cleanFolderOfOldFiles(jobsParentDir, ttlMs);
   }
 
   private static cleanFolderOfOldFiles(folderPath: string, ttlMs: number) {

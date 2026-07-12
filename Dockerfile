@@ -35,11 +35,18 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
-# Ensure tmp and upload directories exist and are writable
-RUN mkdir -p /app/tmp /app/upload && chmod 777 /app/tmp /app/upload
+# Ensure tmp and upload directories exist and are writable by non-root node user
+RUN mkdir -p /app/tmp /app/upload && chown -R node:node /app
 
 # Expose port 3000 for server traffic
 EXPOSE 3000
+
+# Switch to the non-root node user
+USER node
+
+# Healthcheck to verify service and ffmpeg binaries are functional
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.json()).then(data => data.status === 'ok' && data.ffmpeg && data.ffprobe ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 # Start the full-stack server
 CMD ["npm", "run", "start"]

@@ -12,6 +12,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { exportJobService } from "../services/exportJobService";
 import { FfmpegExportService } from "../services/ffmpegExportService";
+import { exportQueue } from "../services/exportQueue";
 import { ExportRequestMetadata } from "../types/exportTypes";
 
 import { config } from "../config";
@@ -282,11 +283,8 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
     outputFilePath,
   });
 
-  // Start processing asynchronously in background
-  FfmpegExportService.executeExport(jobId, metadata, file.path, outputFilePath, config.tempDir)
-    .catch((err) => {
-      console.error(`Export Job ${jobId} failed inside Express router:`, err);
-    });
+  // Enqueue job in our real FIFO queue
+  exportQueue.enqueue(jobId, metadata.projectId, file.path, outputFilePath, metadata, config.tempDir);
 
   // Respond immediately with jobId & queued status
   res.status(201).json({
@@ -339,10 +337,18 @@ exportRouter.get("/:jobId/download", (req: Request, res: Response) => {
     return;
   }
 
-  if (job.status === "expired" || !job.outputFilePath || !fs.existsSync(job.outputFilePath)) {
+  const now = Date.now();
+  const expiresAt = job.expiresAt ?? (job.createdAt + config.outputTtlMinutes * 60 * 1000);
+
+  if (job.status === "expired" || now >= expiresAt || !job.outputFilePath || !fs.existsSync(job.outputFilePath)) {
+    if (job.status !== "expired") {
+      exportJobService.updateJob(jobId, { status: "expired" });
+    }
     res.status(410).json({
-      error: "EXPIRED",
-      message: "Den færdige videofil er udløbet og er blevet slettet. Eksportér projektet igen.",
+      error: {
+        code: "EXPORT_EXPIRED",
+        userMessage: "Eksportfilen er udløbet. Eksportér projektet igen for at oprette en ny videofil."
+      }
     });
     return;
   }
@@ -352,13 +358,9 @@ exportRouter.get("/:jobId/download", (req: Request, res: Response) => {
     return;
   }
 
-  const normalizedFileName = (job.output?.fileName || "coachclip_export.mp4")
-    .replace(/[æÆ]/g, "ae")
-    .replace(/[øØ]/g, "oe")
-    .replace(/[åÅ]/g, "aa")
-    .replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const downloadFileName = job.output?.fileName || "CoachClip.mp4";
 
-  res.download(job.outputFilePath, normalizedFileName, (err) => {
+  res.download(job.outputFilePath, downloadFileName, (err) => {
     if (err) {
       console.error(`Error sending download stream for job ${jobId}:`, err);
     }
@@ -379,25 +381,8 @@ exportRouter.delete("/:jobId", (req: Request, res: Response) => {
     return;
   }
 
-  // Cancel active FFmpeg process if any is running
-  FfmpegExportService.cancelJob(jobId);
+  // Cancel job via exportQueue (handles both queued and active processes cleanly)
+  exportQueue.cancel(jobId);
 
-  // Delete associated files
-  if (job.inputFilePath && fs.existsSync(job.inputFilePath)) {
-    try {
-      fs.unlinkSync(job.inputFilePath);
-    } catch (e) {
-      console.error("Cleanup error during cancel:", e);
-    }
-  }
-  if (job.outputFilePath && fs.existsSync(job.outputFilePath)) {
-    try {
-      fs.unlinkSync(job.outputFilePath);
-    } catch (e) {
-      console.error("Cleanup error during cancel:", e);
-    }
-  }
-
-  exportJobService.updateJob(jobId, { status: "cancelled" });
   res.json({ jobId, status: "cancelled", message: "Eksporten blev afbrudt." });
 });
