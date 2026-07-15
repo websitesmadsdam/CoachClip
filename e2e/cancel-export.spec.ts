@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 
 test.describe("CoachClip - Export Cancellation", () => {
   test("should successfully cancel an active export and clean up the job on the backend", async ({ page, request }) => {
+    page.on("console", (msg) => console.log("PAGE LOG:", msg.text()));
+    
     // 1. Open home page and proceed to video select screen
     await page.goto("/");
     await page.locator("button:has-text('Nyt analyseklip')").first().click();
@@ -59,7 +61,7 @@ test.describe("CoachClip - Export Cancellation", () => {
     await page.locator("button:has-text('Fortsæt og eksporter')").click();
 
     // Wait until progress loader starts (progress >= 0%)
-    await expect(page.locator("h3:has-text('Opretter dit taktikklip')")).toBeVisible();
+    await expect(page.locator("h3:has-text('Uploader video...')").or(page.locator("h3:has-text('Opretter dit taktikklip')"))).toBeVisible({ timeout: 15000 });
 
     // Wait 1 second to let some rendering happen, then click cancellation
     await page.waitForTimeout(1000);

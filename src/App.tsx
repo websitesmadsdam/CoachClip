@@ -29,7 +29,7 @@ import { useObjectUrl } from "./hooks/useObjectUrl";
 const ENABLE_DEMO_DATA = true;
 
 // Sample Stock Video for high contrast prototyping
-const DEFAULT_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-player-jumping-in-a-basketball-game-34283-large.mp4";
+const DEFAULT_VIDEO_URL = "/demo_basketball_video.mp4";
 
 export default function App() {
   // Current tab: "home" | "projects" | "collections" | "settings"
@@ -453,10 +453,31 @@ export default function App() {
                 selectedFile={selectedFile}
                 onFileSelected={handleVideoFile}
                 onUseStockVideo={() => {
-                  setSelectedFile(new File([], "Demo_Basketball_Video.mp4"));
+                  const demoFile = new File([], "Demo_Basketball_Video.mp4");
+                  setSelectedFile(demoFile);
                   setVideoSourceSafely(DEFAULT_VIDEO_URL);
-                  setVideoDuration(20);
-                  setTrimRange({ startTime: 0, endTime: 20 });
+                  setVideoDuration(2);
+                  const newProj: CoachClipProject = {
+                    id: "proj_" + Date.now(),
+                    title: "Uden titel",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    sourceVideo: {
+                      fileName: "Demo_Basketball_Video.mp4",
+                      duration: 2,
+                      size: 0,
+                      width: 640,
+                      height: 360
+                    },
+                    clip: {
+                      startTime: 0,
+                      endTime: 2
+                    },
+                    annotations: [],
+                    exportStatus: "not_exported"
+                  };
+                  setActiveProject(newProj);
+                  setTrimRange({ startTime: 0, endTime: 2 });
                   setEditorStep("trim");
                 }}
                 onBack={() => setEditorStep("idle")}

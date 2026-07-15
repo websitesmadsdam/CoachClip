@@ -64,8 +64,9 @@ test.describe("CoachClip - Export Expiry TTL", () => {
     const statusData = await statusRes.json();
     expect(statusData.status).toBe("completed");
 
-    // 11. Simulate Expiration/TTL by deleting the output file from the server's `./tmp/exports` folder
-    const exportsDir = path.resolve("./tmp/exports");
+    // 11. Simulate Expiration/TTL by deleting the output file from the server's `TEMP_DIR/exports` folder
+    const tempDir = process.env.TEMP_DIR || "./tmp";
+    const exportsDir = path.resolve(tempDir, "exports");
     const files = fs.readdirSync(exportsDir);
     const matchingFile = files.find(f => f.startsWith(jobId!));
 

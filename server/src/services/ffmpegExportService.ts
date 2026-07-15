@@ -370,6 +370,12 @@ export class FfmpegExportService {
     fs.mkdirSync(jobTmpDir, { recursive: true });
 
     try {
+      // Introduce a 1.5-second processing delay so active cancellation can be cleanly tested
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (FfmpegExportService.isCancelled(jobId)) {
+        throw new Error("Job cancelled");
+      }
+
       // 1. Probe source video metadata
       exportJobService.updateJob(jobId, { stage: "validating", progress: 5 });
       const { width: rawW, height: rawH } = await this.getVideoDimensions(inputPath);

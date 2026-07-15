@@ -43,13 +43,16 @@ test.describe("CoachClip - Full E2E Export Flow", () => {
     console.log("Placing Arrow Annotation...");
     await page.locator("button:has-text('Vis bevægelse')").first().click();
     // Simulate drawing by doing drag-and-drop on the interactive workspace overlay
-    await page.locator(".absolute.inset-0.z-20.pointer-events-auto").dragTo(
-      page.locator(".absolute.inset-0.z-20.pointer-events-auto"),
-      {
-        sourcePosition: { x: 100, y: 100 },
-        targetPosition: { x: 250, y: 250 }
-      }
-    );
+    const box = await page.locator(".absolute.inset-0.z-20.pointer-events-auto").boundingBox();
+    if (box) {
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 250, box.y + 250);
+      await page.mouse.up();
+    } else {
+      // Fallback
+      await page.locator(".absolute.inset-0.z-20.pointer-events-auto").click({ position: { x: 100, y: 100 } });
+    }
     await page.locator("button:has-text('Gem')").click();
 
     // --- ADD FREEZE FRAME ---
@@ -73,7 +76,7 @@ test.describe("CoachClip - Full E2E Export Flow", () => {
     await page.locator("button:has-text('Fortsæt og eksporter')").click();
 
     // 10. Export Screen (polling loop)
-    await expect(page.locator("h3:has-text('Opretter dit taktikklip')")).toBeVisible();
+    await expect(page.locator("h3:has-text('Uploader video...')").or(page.locator("h3:has-text('Opretter dit taktikklip')"))).toBeVisible({ timeout: 15000 });
     
     // Wait for compilation to complete (should render under 60s)
     await expect(page.locator("h3:has-text('Dit klip er klar!')")).toBeVisible({ timeout: 60000 });

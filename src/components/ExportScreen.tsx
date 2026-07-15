@@ -53,12 +53,12 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
     try {
       let fileToUpload: File | Blob;
 
-      if (sourceFile) {
+      if (sourceFile && sourceFile.size > 0) {
         fileToUpload = sourceFile;
       } else {
         // Fallback: If stock/demo video is used, fetch it as a blob
         setStage("Henter demovideo...");
-        const demoUrl = "https://assets.mixkit.co/videos/preview/mixkit-player-jumping-in-a-basketball-game-34283-large.mp4";
+        const demoUrl = "/demo_basketball_video.mp4";
         const response = await fetch(demoUrl);
         const blob = await response.blob();
         fileToUpload = new File([blob], "Demo_Basketball_Video.mp4", { type: "video/mp4" });
@@ -223,7 +223,8 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
       }
     }
 
-    onExportFailed("Eksporten blev afbrudt.");
+    setErrorMsg("Eksporten blev afbrudt.");
+    setStatus("failed");
   };
 
   // Privacy Confirmation Dialog (Section 9!)
@@ -258,7 +259,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
   }
 
   // Failure display
-  if (status === "failed") {
+  if (status === "failed" || status === "cancelled") {
     return (
       <div className="w-full max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 text-center animate-scale-up">
         <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
@@ -266,7 +267,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
         </div>
         <h3 className="text-xl font-extrabold text-slate-900 mb-2">Eksporten fejlede</h3>
         <p className="text-xs text-slate-500 mb-6 leading-relaxed font-medium">
-          {errorMsg || "Klippet kunne ikke oprettes. Projektet og dine markeringer er stadig gemt."}
+          {errorMsg || "Eksporten blev afbrudt."}
         </p>
         <div className="flex gap-2.5">
           <button
