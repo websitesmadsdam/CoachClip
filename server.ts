@@ -138,7 +138,7 @@ async function startServer() {
     }
   };
 
-  // POST exports limit: 5 requests/min (to protect expensive encoding)
+  // POST exports limit
   const exportsCreateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (req.method !== "POST") {
       next();
@@ -147,8 +147,8 @@ async function startServer() {
     const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
     const ipKey = `exports_create_${Array.isArray(ip) ? ip[0] : ip}`;
     const now = Date.now();
-    const windowMs = 60000;
-    const maxRequests = 5;
+    const windowMs = config.rateLimitExportCreateWindowSeconds * 1000;
+    const maxRequests = config.rateLimitExportCreate;
 
     const rateData = rateLimitMap.get(ipKey);
     if (!rateData || now > rateData.resetTime) {
@@ -169,9 +169,65 @@ async function startServer() {
     }
   };
 
+  // GET exports status limit
+  const exportsStatusLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+    const ipKey = `exports_status_${Array.isArray(ip) ? ip[0] : ip}`;
+    const now = Date.now();
+    const windowMs = config.rateLimitStatusWindowSeconds * 1000;
+    const maxRequests = config.rateLimitStatus;
+
+    const rateData = rateLimitMap.get(ipKey);
+    if (!rateData || now > rateData.resetTime) {
+      rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
+      next();
+    } else {
+      rateData.count++;
+      if (rateData.count > maxRequests) {
+        const secondsLeft = Math.ceil((rateData.resetTime - now) / 1000);
+        res.setHeader("Retry-After", secondsLeft.toString());
+        res.status(429).json({
+          error: "TOO_MANY_REQUESTS",
+          message: `Du har foretaget for mange statusforespørgsler. Prøv igen om ${secondsLeft} sekunder.`
+        });
+      } else {
+        next();
+      }
+    }
+  };
+
+  // GET exports download limit
+  const exportsDownloadLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+    const ipKey = `exports_download_${Array.isArray(ip) ? ip[0] : ip}`;
+    const now = Date.now();
+    const windowMs = config.rateLimitDownloadWindowSeconds * 1000;
+    const maxRequests = config.rateLimitDownload;
+
+    const rateData = rateLimitMap.get(ipKey);
+    if (!rateData || now > rateData.resetTime) {
+      rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
+      next();
+    } else {
+      rateData.count++;
+      if (rateData.count > maxRequests) {
+        const secondsLeft = Math.ceil((rateData.resetTime - now) / 1000);
+        res.setHeader("Retry-After", secondsLeft.toString());
+        res.status(429).json({
+          error: "TOO_MANY_REQUESTS",
+          message: `Du har foretaget for mange downloads. Prøv igen om ${secondsLeft} sekunder.`
+        });
+      } else {
+        next();
+      }
+    }
+  };
+
   // Mount rate limiters
   app.use("/api/", generalLimiter);
   app.post("/api/exports", exportsCreateLimiter);
+  app.get("/api/exports/:jobId", exportsStatusLimiter);
+  app.get("/api/exports/:jobId/download", exportsDownloadLimiter);
 
   // Mount API endpoints FIRST
   app.use("/api/exports", exportRouter);
@@ -278,11 +334,11 @@ async function startServer() {
       logger.info("[CoachClip Server] HTTP server closed.");
     });
 
-    // 3. Set a fallback force-exit timeout (30 seconds)
+    // 3. Set a fallback force-exit timeout
     const forceExitTimeout = setTimeout(() => {
       logger.error("[CoachClip Server] Force shutdown timeout reached. Exiting with failure.");
       process.exit(1);
-    }, 30000);
+    }, config.shutdownGracePeriodSeconds * 1000);
 
     // 4. Wait for active jobs to finish
     logger.info(`[CoachClip Server] Waiting for active export jobs to complete. Active count: ${exportQueue.getActiveCount()}`);

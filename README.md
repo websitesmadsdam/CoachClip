@@ -1,6 +1,12 @@
 # CoachClip – Pilotklar, visuelt valideret og produktionsnær MVP
 
-Velkommen til CoachClip! Dette er den pilotklare version, som er optimeret og stabiliseret til kontrolleret pilotbrug med rigtige trænere. 
+Velkommen til CoachClip! Dette er den pilotklare version, som er optimeret og stabiliseret til kontrolleret pilotbrug med rigtige trænere.
+
+CoachClip er bygget som en strømlinet single-instance pilotapplikation uden ekstern database:
+- **Ingen database eller registrering**: Ingen login eller brugerstyring kræves, hvilket sikrer øjeblikkelig adgang.
+- **In-memory jobstatus**: Eksportjobs og deres tilstande styres udelukkende in-memory. Eventuelle aktive jobstatusser nulstilles ved servergenstart.
+- **Lokal browserlagring**: Projekter, tidslinjemarkeringer og metadata gemmes direkte i trænerens egen browser via IndexedDB.
+- **Automatisk oprydning med TTL (Time-To-Live)**: Kildevideoer og færdigbehandlede eksportfiler gemmes midlertidigt på serveren under transkodningen og slettes automatisk efter en konfigureret levetid (TTL).
 
 MVP-arkitekturen bevarer CoachClips lette, intuitive flow, IndexedDB-lagring og stærke FFmpeg-motor, samtidig med at den sikrer en meget høj visuel overensstemmelse mellem web-previewet og det færdige, eksporterede videoklip via en fælles geometrimotor og automatiske pixel-regressions-smoke-tests.
 

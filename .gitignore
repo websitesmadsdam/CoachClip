@@ -1,17 +1,12 @@
 node_modules/
-build/
 dist/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
-
-# Runtime & temporary files
 tmp/
-upload/
-.next/
-out/
-.npm/
-.cache/
-*.tsbuildinfo
+uploads/
+outputs/
+test-results/
+playwright-report/
+coverage/
+*.log
+.env
+.env.*
+!.env.example

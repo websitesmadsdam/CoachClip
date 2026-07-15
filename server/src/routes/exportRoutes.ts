@@ -57,7 +57,7 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
 
   if (!exportQueue.isAcceptingNewJobs()) {
     if (file) {
-      try { fs.unlinkSync(file.path); } catch (e) {}
+      try { fs.unlinkSync(file.path); } catch (e) { /* ignore */ }
     }
     res.status(503).json({
       error: {
