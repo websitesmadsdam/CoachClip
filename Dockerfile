@@ -46,7 +46,7 @@ USER node
 
 # Healthcheck to verify service and ffmpeg binaries are functional
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.json()).then(data => data.status === 'ok' && data.ffmpeg && data.ffprobe ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://localhost:3000/api/ready').then(r => r.json()).then(data => data.status === 'ready' ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 # Start the full-stack server
 CMD ["npm", "run", "start"]

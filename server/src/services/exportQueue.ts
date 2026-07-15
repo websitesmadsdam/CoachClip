@@ -20,6 +20,12 @@ class ExportQueue {
   private queue: QueueItem[] = [];
   private activeJobs = new Set<string>();
   private maxConcurrency = Number(process.env.MAX_CONCURRENT_EXPORTS || "2");
+  private stopped = false;
+
+  public stopNewJobs(): void {
+    this.stopped = true;
+    console.log(`[ExportQueue] Queue stopped. New jobs will be rejected.`);
+  }
 
   public enqueue(
     jobId: string,
@@ -29,6 +35,12 @@ class ExportQueue {
     metadata: ExportRequestMetadata,
     tempDir: string
   ): void {
+    if (this.stopped) {
+      console.warn(`[ExportQueue] Queue is stopped. Rejecting Job ${jobId}.`);
+      exportJobService.updateJob(jobId, { status: "failed" });
+      return;
+    }
+
     const job = exportJobService.getJob(jobId);
     if (!job || job.status === "cancelled") {
       return;
@@ -47,7 +59,7 @@ class ExportQueue {
     this.processNext();
   }
 
-  public cancel(jobId: string): boolean {
+  public async cancel(jobId: string): Promise<boolean> {
     // 1. If it's in the queue (waiting), remove it
     const index = this.queue.findIndex((item) => item.jobId === jobId);
     if (index !== -1) {
@@ -57,13 +69,24 @@ class ExportQueue {
       return true;
     }
 
-    // 2. If it is active, FfmpegExportService will kill its process
+    // 2. If it is active, wait for the cancelJob process to fully terminate
     if (this.activeJobs.has(jobId)) {
       console.log(`[ExportQueue] Job ${jobId} is active, cancelling via service`);
-      FfmpegExportService.cancelJob(jobId);
-      this.activeJobs.delete(jobId);
+      // Update job status to cancelled
       exportJobService.updateJob(jobId, { status: "cancelled" });
-      this.processNext();
+      
+      // Cancel the job process and wait for it to exit
+      await FfmpegExportService.cancelJob(jobId);
+      
+      // Wait a tiny bit to ensure the executeExport promise's finally block has fully run
+      // and onJobFinished has been executed
+      for (let i = 0; i < 10; i++) {
+        if (!this.activeJobs.has(jobId)) {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      
       return true;
     }
 
@@ -87,6 +110,11 @@ class ExportQueue {
   }
 
   private processNext(): void {
+    if (this.stopped) {
+      console.log(`[ExportQueue] Queue is stopped. Not processing any further queued jobs.`);
+      return;
+    }
+
     if (this.activeJobs.size >= this.maxConcurrency) {
       console.log(`[ExportQueue] Concurrency limit of ${this.maxConcurrency} reached.`);
       return;

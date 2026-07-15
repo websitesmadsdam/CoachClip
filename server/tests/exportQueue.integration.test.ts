@@ -6,14 +6,9 @@ import { FfmpegExportService } from "../src/services/ffmpegExportService";
 // Mock FfmpegExportService so we do not run real slow ffmpeg child processes during queue tests
 vi.mock("../src/services/ffmpegExportService", async (importOriginal) => {
   const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    FfmpegExportService: {
-      ...actual.FfmpegExportService,
-      executeExport: vi.fn(),
-      getVideoDimensions: vi.fn(),
-    }
-  };
+  actual.FfmpegExportService.executeExport = vi.fn();
+  actual.FfmpegExportService.getVideoDimensions = vi.fn();
+  return actual;
 });
 
 describe("ExportQueue - Integration Tests", () => {
@@ -40,13 +35,7 @@ describe("ExportQueue - Integration Tests", () => {
     
     // Create job entries in exportJobService
     for (const jid of jobIds) {
-      exportJobService.createJob(jid, {
-        projectId: "proj-1",
-        clip: { startTime: 0, endTime: 5 },
-        sourceVideo: { fileName: "test.mp4", duration: 10, width: 640, height: 360 },
-        annotations: [],
-        output: { maxWidth: 640, maxHeight: 360, format: "mp4" }
-      });
+      exportJobService.createJob(jid, "proj-1");
     }
 
     // Prepare resolvers to control job execution timing manually
@@ -123,13 +112,7 @@ describe("ExportQueue - Integration Tests", () => {
   it("should handle queued job cancellation and bypass processing", async () => {
     const jobIds = ["job-a", "job-b"];
     for (const jid of jobIds) {
-      exportJobService.createJob(jid, {
-        projectId: "proj-2",
-        clip: { startTime: 0, endTime: 5 },
-        sourceVideo: { fileName: "test.mp4", duration: 10, width: 640, height: 360 },
-        annotations: [],
-        output: { maxWidth: 640, maxHeight: 360, format: "mp4" }
-      });
+      exportJobService.createJob(jid, "proj-2");
     }
 
     let jobAResolve: any;
@@ -148,7 +131,7 @@ describe("ExportQueue - Integration Tests", () => {
     expect(exportQueue.getQueuedCount()).toBe(1);
 
     // Cancel job-b while it's in the queue
-    const cancelResult = exportQueue.cancel("job-b");
+    const cancelResult = await exportQueue.cancel("job-b");
     expect(cancelResult).toBe(true);
     expect(exportQueue.getQueuedCount()).toBe(0);
 
@@ -162,5 +145,78 @@ describe("ExportQueue - Integration Tests", () => {
     // Both should be finished and no further exports should have run
     expect(exportQueue.getActiveCount()).toBe(0);
     expect(executeMock).toHaveBeenCalledTimes(1); // Only job-a was executed
+  });
+
+  it("should handle active job cancellation with concurrency limit 2", async () => {
+    // 1. Set concurrency to 2
+    (exportQueue as any).maxConcurrency = 2;
+    process.env.MAX_CONCURRENT_EXPORTS = "2";
+
+    const jobIds = ["job-1", "job-2", "job-3"];
+    for (const jid of jobIds) {
+      exportJobService.createJob(jid, "proj-1");
+    }
+
+    // Prepare resolvers to control job execution timing
+    const resolvers: Record<string, () => void> = {};
+    const executePromises = jobIds.map((jid) => {
+      return new Promise<void>((resolve) => {
+        resolvers[jid] = resolve;
+      });
+    });
+
+    let cancelCalled = false;
+    const cancelMock = vi.spyOn(FfmpegExportService, "cancelJob").mockImplementation(async (jid) => {
+      cancelCalled = true;
+      // Simulate process exit delay of 100ms
+      await new Promise((r) => setTimeout(r, 100));
+      return true;
+    });
+
+    executeMock.mockImplementation((jobId: string) => {
+      return new Promise<void>((resolve) => {
+        resolvers[jobId] = resolve;
+      });
+    });
+
+    // Enqueue 3 jobs
+    exportQueue.enqueue("job-1", "proj-1", "in.mp4", "out-1.mp4", {} as any, "tmp");
+    exportQueue.enqueue("job-2", "proj-1", "in.mp4", "out-2.mp4", {} as any, "tmp");
+    exportQueue.enqueue("job-3", "proj-1", "in.mp4", "out-3.mp4", {} as any, "tmp");
+
+    // job-1 and job-2 should be active, job-3 should be queued
+    expect(exportQueue.getActiveCount()).toBe(2);
+    expect(exportQueue.getQueuedCount()).toBe(1);
+
+    // Cancel job-1
+    const cancelPromise = exportQueue.cancel("job-1");
+    
+    // Status should be marked as cancelled immediately
+    const job1 = exportJobService.getJob("job-1");
+    expect(job1?.status).toBe("cancelled");
+
+    // job-3 must NOT start yet because job-1 process hasn't finished stopping
+    expect(exportQueue.getQueuedCount()).toBe(1);
+    expect(exportQueue.getActiveCount()).toBe(2);
+
+    // Wait for cancellation to resolve
+    await cancelPromise;
+
+    // Trigger the executeExport promise's finally block to simulate process exit on cancel
+    resolvers["job-1"]();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Now, job-3 should have started and queue should be updated
+    expect(exportQueue.getQueuedCount()).toBe(0);
+    expect(exportQueue.getActiveCount()).toBe(2); // job-2 and job-3 active
+    expect(cancelCalled).toBe(true);
+
+    // Resolve remaining jobs
+    resolvers["job-2"]();
+    resolvers["job-3"]();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(exportQueue.getActiveCount()).toBe(0);
+    expect(exportQueue.getQueuedCount()).toBe(0);
   });
 });

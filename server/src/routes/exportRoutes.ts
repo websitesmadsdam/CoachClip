@@ -179,8 +179,8 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
   }
 
   // Comprehensive freeze validation pass
-  const freezeAnnos = metadata.annotations.filter((a: any) => a.type === "freeze");
-  const sortedFreezes = [...freezeAnnos].sort((a, b) => a.time - b.time);
+  const freezeAnnos = metadata.annotations.filter((a: any) => a.type === "freeze") as any[];
+  const sortedFreezes = [...freezeAnnos].sort((a: any, b: any) => a.time - b.time);
   let lastFreezeTime = -999;
   let cumulativeFreezeDur = 0;
 
@@ -400,7 +400,7 @@ exportRouter.get("/:jobId/download", (req: Request, res: Response) => {
 });
 
 // 4. Cancel/Delete Export Job Endpoint
-exportRouter.delete("/:jobId", (req: Request, res: Response) => {
+exportRouter.delete("/:jobId", async (req: Request, res: Response) => {
   const jobId = req.params.jobId;
   if (typeof jobId !== "string") {
     res.status(400).json({ error: "INVALID_JOB_ID", message: "Ugyldigt job ID" });
@@ -414,7 +414,7 @@ exportRouter.delete("/:jobId", (req: Request, res: Response) => {
   }
 
   // Cancel job via exportQueue (handles both queued and active processes cleanly)
-  exportQueue.cancel(jobId);
+  await exportQueue.cancel(jobId);
 
   res.json({ jobId, status: "cancelled", message: "Eksporten blev afbrudt." });
 });

@@ -14,6 +14,7 @@ export type AppConfig = {
   ffmpegTimeoutSeconds: number;
   corsOrigin: string;
   exportApiUrl?: string;
+  e2eProcessingDelayMs: number;
 };
 
 function getEnv(key: string, defaultValue: string): string {
@@ -28,7 +29,8 @@ export const config: AppConfig = {
   maxClipDurationSeconds: Number(getEnv("MAX_CLIP_DURATION_SECONDS", "90")), // 90s
   ffmpegTimeoutSeconds: Number(getEnv("FFMPEG_TIMEOUT_SECONDS", "600")),
   corsOrigin: getEnv("CORS_ORIGIN", "*"),
-  exportApiUrl: process.env.VITE_EXPORT_API_URL
+  exportApiUrl: process.env.VITE_EXPORT_API_URL,
+  e2eProcessingDelayMs: Number(getEnv("E2E_PROCESSING_DELAY_MS", "0"))
 };
 
 export function validateConfig() {
@@ -46,5 +48,8 @@ export function validateConfig() {
   }
   if (isNaN(config.ffmpegTimeoutSeconds) || config.ffmpegTimeoutSeconds <= 0) {
     throw new Error("INVALID_CONFIG: FFMPEG_TIMEOUT_SECONDS must be a positive number");
+  }
+  if (process.env.NODE_ENV === "production" && config.e2eProcessingDelayMs > 0) {
+    throw new Error("INVALID_CONFIG: E2E_PROCESSING_DELAY_MS must be 0 in production mode");
   }
 }

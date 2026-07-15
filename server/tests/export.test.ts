@@ -359,4 +359,64 @@ describe("CoachClip Backend MVP - Unit Tests", () => {
       expect(res.error).toBe("TOO_MUCH_FREEZE");
     });
   });
+
+  // 6. Test FileCleanupService TTL Cleanup
+  describe("FileCleanupService TTL Cleanup", () => {
+    const testTempDir = path.resolve("./tmp-cleanup-test");
+    const testUploadsDir = path.join(testTempDir, "uploads");
+    const testExportsDir = path.join(testTempDir, "exports");
+
+    beforeEach(() => {
+      fs.mkdirSync(testUploadsDir, { recursive: true });
+      fs.mkdirSync(testExportsDir, { recursive: true });
+    });
+
+    afterEach(() => {
+      try {
+        fs.rmSync(testTempDir, { recursive: true, force: true });
+      } catch (e) {
+        // ignore
+      }
+    });
+
+    it("should clean up expired jobs and delete their input/output files", () => {
+      const jobId = "cleanup-test-job-123";
+      const projectId = "proj-abc";
+
+      // 1. Create a dummy completed job that expired 5 minutes ago
+      const job = exportJobService.createJob(jobId, projectId);
+      
+      const dummyInputPath = path.join(testUploadsDir, "dummy_input.mp4");
+      const dummyOutputPath = path.join(testExportsDir, "dummy_output.mp4");
+
+      fs.writeFileSync(dummyInputPath, "dummy video data");
+      fs.writeFileSync(dummyOutputPath, "dummy output video data");
+
+      expect(fs.existsSync(dummyInputPath)).toBe(true);
+      expect(fs.existsSync(dummyOutputPath)).toBe(true);
+
+      // Mutate job properties to set file paths and expired expiresAt
+      const now = Date.now();
+      exportJobService.updateJob(jobId, {
+        status: "completed",
+        expiresAt: now - 300000, // expired 5 minutes ago
+      });
+      
+      const updatedJob = exportJobService.getJob(jobId);
+      if (updatedJob) {
+        updatedJob.inputFilePath = dummyInputPath;
+        updatedJob.outputFilePath = dummyOutputPath;
+      }
+
+      // 2. Run cleanup
+      FileCleanupService.runCleanup(testUploadsDir, testExportsDir, 10);
+
+      // 3. Assert files are deleted and job status updated to expired
+      expect(fs.existsSync(dummyInputPath)).toBe(false);
+      expect(fs.existsSync(dummyOutputPath)).toBe(false);
+
+      const finalJob = exportJobService.getJob(jobId);
+      expect(finalJob?.status).toBe("expired");
+    });
+  });
 });
