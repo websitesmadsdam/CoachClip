@@ -20,11 +20,23 @@ class ExportQueue {
   private queue: QueueItem[] = [];
   private activeJobs = new Set<string>();
   private maxConcurrency = Number(process.env.MAX_CONCURRENT_EXPORTS || "2");
-  private stopped = false;
+  private acceptingNewJobs = true;
+  private processingEnabled = true;
 
   public stopNewJobs(): void {
-    this.stopped = true;
-    console.log(`[ExportQueue] Queue stopped. New jobs will be rejected.`);
+    this.acceptingNewJobs = false;
+    this.processingEnabled = false;
+    console.log(`[ExportQueue] Queue stopped. New jobs will be rejected and queued jobs won't start.`);
+  }
+
+  public resumeJobs(): void {
+    this.acceptingNewJobs = true;
+    this.processingEnabled = true;
+    console.log(`[ExportQueue] Queue resumed.`);
+  }
+
+  public isAcceptingNewJobs(): boolean {
+    return this.acceptingNewJobs;
   }
 
   public enqueue(
@@ -35,7 +47,7 @@ class ExportQueue {
     metadata: ExportRequestMetadata,
     tempDir: string
   ): void {
-    if (this.stopped) {
+    if (!this.acceptingNewJobs) {
       console.warn(`[ExportQueue] Queue is stopped. Rejecting Job ${jobId}.`);
       exportJobService.updateJob(jobId, { status: "failed" });
       return;
@@ -110,8 +122,8 @@ class ExportQueue {
   }
 
   private processNext(): void {
-    if (this.stopped) {
-      console.log(`[ExportQueue] Queue is stopped. Not processing any further queued jobs.`);
+    if (!this.processingEnabled) {
+      console.log(`[ExportQueue] Processing is disabled. Not processing any further queued jobs.`);
       return;
     }
 

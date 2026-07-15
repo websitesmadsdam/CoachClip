@@ -157,13 +157,12 @@ describe("ExportQueue - Integration Tests", () => {
       exportJobService.createJob(jid, "proj-1");
     }
 
+    // Track concurrent active jobs / FFmpeg processes
+    let activeFfmpegCount = 0;
+    let maxObservedConcurrency = 0;
+
     // Prepare resolvers to control job execution timing
     const resolvers: Record<string, () => void> = {};
-    const executePromises = jobIds.map((jid) => {
-      return new Promise<void>((resolve) => {
-        resolvers[jid] = resolve;
-      });
-    });
 
     let cancelCalled = false;
     const cancelMock = vi.spyOn(FfmpegExportService, "cancelJob").mockImplementation(async (jid) => {
@@ -174,8 +173,15 @@ describe("ExportQueue - Integration Tests", () => {
     });
 
     executeMock.mockImplementation((jobId: string) => {
+      activeFfmpegCount++;
+      if (activeFfmpegCount > maxObservedConcurrency) {
+        maxObservedConcurrency = activeFfmpegCount;
+      }
       return new Promise<void>((resolve) => {
-        resolvers[jobId] = resolve;
+        resolvers[jobId] = () => {
+          activeFfmpegCount--;
+          resolve();
+        };
       });
     });
 
@@ -187,6 +193,7 @@ describe("ExportQueue - Integration Tests", () => {
     // job-1 and job-2 should be active, job-3 should be queued
     expect(exportQueue.getActiveCount()).toBe(2);
     expect(exportQueue.getQueuedCount()).toBe(1);
+    expect(maxObservedConcurrency).toBeLessThanOrEqual(2);
 
     // Cancel job-1
     const cancelPromise = exportQueue.cancel("job-1");
@@ -210,6 +217,7 @@ describe("ExportQueue - Integration Tests", () => {
     expect(exportQueue.getQueuedCount()).toBe(0);
     expect(exportQueue.getActiveCount()).toBe(2); // job-2 and job-3 active
     expect(cancelCalled).toBe(true);
+    expect(maxObservedConcurrency).toBeLessThanOrEqual(2);
 
     // Resolve remaining jobs
     resolvers["job-2"]();
@@ -218,5 +226,8 @@ describe("ExportQueue - Integration Tests", () => {
 
     expect(exportQueue.getActiveCount()).toBe(0);
     expect(exportQueue.getQueuedCount()).toBe(0);
+
+    console.log(`[Test Log] Højeste observerede antal samtidige FFmpeg-processer: ${maxObservedConcurrency}`);
+    expect(maxObservedConcurrency).toBe(2);
   });
 });

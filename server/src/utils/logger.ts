@@ -12,26 +12,119 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 3,
 };
 
+const ALLOWED_KEYS = [
+  "timestamp",
+  "level",
+  "event",
+  "jobId",
+  "status",
+  "stage",
+  "activeJobs",
+  "queuedJobs",
+  "durationMs",
+  "errorCode",
+  "processExitCode",
+];
+
+// Validate LOG_LEVEL at startup
+const rawLevel = (process.env.LOG_LEVEL || "info").toLowerCase();
+const validLevels = Object.keys(LOG_LEVELS);
+if (rawLevel && !validLevels.includes(rawLevel)) {
+  console.warn(`[Logger] Invalid LOG_LEVEL '${process.env.LOG_LEVEL}'. Falling back to 'info'.`);
+}
+
 function getLogLevel(): number {
   const envLevel = (process.env.LOG_LEVEL || "info").toLowerCase() as LogLevel;
   return LOG_LEVELS[envLevel] !== undefined ? LOG_LEVELS[envLevel] : 2;
 }
 
+export function redactString(str: string): string {
+  if (!str) return str;
+  let redacted = str;
+
+  // 1. Redact local absolute paths (e.g., /tmp/coachclip, /app/applet/...)
+  redacted = redacted.replace(/(?:\/[a-zA-Z0-9_\.\-]+){2,}/g, "[REDACTED_PATH]");
+
+  // 2. Redact original videofilnavne (e.g. video_name.mp4 or clip.mov)
+  redacted = redacted.replace(/\b[a-zA-Z0-9_\-\.]+\.(mp4|mov|avi|mkv)\b/gi, "[REDACTED_FILE]");
+
+  // 3. Redact tokens / secrets (e.g. Bearer xyz, token=abc)
+  redacted = redacted.replace(/token=[a-zA-Z0-9_\-\.\:\+]+/gi, "token=[REDACTED_SECRET]");
+  redacted = redacted.replace(/bearer\s+[a-zA-Z0-9_\-\.\:\+]+/gi, "Bearer [REDACTED_SECRET]");
+
+  // 4. Redact annotation text patterns
+  redacted = redacted.replace(/"text"\s*:\s*"[^"]*"/gi, '"text":"[REDACTED_TEXT]"');
+  redacted = redacted.replace(/'text'\s*:\s*'[^']*'/gi, "'text':'[REDACTED_TEXT]'");
+
+  // 5. Redact entire FFmpeg commands (e.g. containing ffmpeg -i ...)
+  if (redacted.toLowerCase().includes("ffmpeg") && redacted.toLowerCase().includes("-i")) {
+    redacted = "[REDACTED_FFMPEG_COMMAND]";
+  }
+
+  return redacted;
+}
+
+function sanitizeValue(key: string, val: any): any {
+  if (typeof val === "string") {
+    return redactString(val);
+  }
+  return val;
+}
+
 export class Logger {
-  private prefix: string;
+  private context?: string;
+  private jobId?: string;
 
   constructor(context?: string, jobId?: string) {
-    const contextPart = context ? `[${context}]` : "";
-    const jobPart = jobId ? `[Job ${jobId}]` : "";
-    this.prefix = `${contextPart}${jobPart}`.trim();
+    this.context = context;
+    this.jobId = jobId;
   }
 
   private log(level: LogLevel, message: string, ...args: any[]) {
     if (LOG_LEVELS[level] <= getLogLevel()) {
       const timestamp = new Date().toISOString();
-      const levelTag = level.toUpperCase().padEnd(5);
-      const prefixStr = this.prefix ? ` ${this.prefix}` : "";
-      console.log(`[${timestamp}] [${levelTag}]${prefixStr}: ${message}`, ...args);
+      const isProd = process.env.NODE_ENV === "production";
+      let jobId = this.jobId;
+
+      // Extract metadata or allowed keys from args
+      const meta: Record<string, any> = {};
+      for (const arg of args) {
+        if (arg && typeof arg === "object") {
+          for (const key of ALLOWED_KEYS) {
+            if (arg[key] !== undefined) {
+              meta[key] = arg[key];
+            }
+          }
+          if (!jobId && arg.jobId) {
+            jobId = arg.jobId;
+          }
+        }
+      }
+
+      const redactedMessage = redactString(message);
+
+      if (isProd) {
+        const logObj: Record<string, any> = {
+          timestamp,
+          level,
+          event: redactedMessage,
+        };
+        if (jobId) logObj.jobId = jobId;
+
+        for (const key of ALLOWED_KEYS) {
+          if (meta[key] !== undefined && key !== "timestamp" && key !== "level" && key !== "event") {
+            logObj[key] = sanitizeValue(key, meta[key]);
+          }
+        }
+
+        console.log(JSON.stringify(logObj));
+      } else {
+        const levelTag = level.toUpperCase().padEnd(5);
+        const contextPart = this.context ? `[${this.context}]` : "";
+        const jobPart = jobId ? `[Job ${jobId}]` : "";
+        const prefixStr = (contextPart || jobPart) ? ` ${contextPart}${jobPart}` : "";
+        console.log(`[${timestamp}] [${levelTag}]${prefixStr}: ${redactedMessage}`, ...args);
+      }
     }
   }
 

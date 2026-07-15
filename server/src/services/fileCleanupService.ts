@@ -6,6 +6,7 @@
 import fs from "fs";
 import path from "path";
 import { exportJobService } from "./exportJobService";
+import { logger } from "../utils/logger";
 
 export class FileCleanupService {
   private static cleanupInterval: NodeJS.Timeout | null = null;
@@ -47,7 +48,7 @@ export class FileCleanupService {
           try {
             fs.unlinkSync(job.outputFilePath);
           } catch (e) {
-            console.error(`Failed to delete output file ${job.outputFilePath}:`, e);
+            logger.error(`Failed to delete output file ${job.outputFilePath}:`, e);
           }
         }
         // Delete input file if exists
@@ -55,7 +56,7 @@ export class FileCleanupService {
           try {
             fs.unlinkSync(job.inputFilePath);
           } catch (e) {
-            console.error(`Failed to delete input file ${job.inputFilePath}:`, e);
+            logger.error(`Failed to delete input file ${job.inputFilePath}:`, e);
           }
         }
         // Set job status
@@ -66,7 +67,7 @@ export class FileCleanupService {
           try {
             fs.unlinkSync(job.outputFilePath);
           } catch (e) {
-            console.warn(`Failed to delete output file during cleanup:`, e);
+            logger.warn(`Failed to delete output file during cleanup:`, e);
           }
         }
         // Delete input file if exists
@@ -74,7 +75,7 @@ export class FileCleanupService {
           try {
             fs.unlinkSync(job.inputFilePath);
           } catch (e) {
-            console.warn(`Failed to delete input file during cleanup:`, e);
+            logger.warn(`Failed to delete input file during cleanup:`, e);
           }
         }
       }
@@ -104,7 +105,7 @@ export class FileCleanupService {
           try {
             fs.unlinkSync(filePath);
           } catch (e) {
-            console.error(`Cleanup failed for file ${filePath}:`, e);
+            logger.error(`Cleanup failed for file ${filePath}:`, e);
           }
         } else if (stats.isDirectory()) {
           // If a subdirectory is old, remove recursively
@@ -112,13 +113,13 @@ export class FileCleanupService {
             try {
               fs.rmSync(filePath, { recursive: true, force: true });
             } catch (e) {
-              console.error(`Cleanup failed for directory ${filePath}:`, e);
+              logger.error(`Cleanup failed for directory ${filePath}:`, e);
             }
           }
         }
       }
     } catch (e) {
-      console.error(`Failed to scan folder for cleanup: ${folderPath}`, e);
+      logger.error(`Failed to scan folder for cleanup: ${folderPath}`, e);
     }
   }
 

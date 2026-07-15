@@ -6,3 +6,12 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Runtime & temporary files
+tmp/
+upload/
+.next/
+out/
+.npm/
+.cache/
+*.tsbuildinfo

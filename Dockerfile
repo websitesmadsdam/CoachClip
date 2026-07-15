@@ -16,6 +16,9 @@ COPY . .
 # Build the frontend and backend bundle
 RUN npm run build
 
+# Prune development dependencies to keep production image size optimized
+RUN npm prune --production
+
 # --- Production Environment ---
 FROM node:20-slim AS runner
 

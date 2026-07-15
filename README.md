@@ -44,112 +44,7 @@ npm run verify
 Når du kører `verify`, afvikles følgende faser sekventielt:
 1. **Linter (`eslint`)**: Sikrer streng kodekvalitet, korrekt typesikkerhed og syntaksmæssig præcision.
 2. **Typecheck (`tsc`)**: Garanterer fuld type-sikkerhed på tværs af frontend og backend.
-3. **Enhedstests (`vitest`)**: Tester de underliggende matematiske formler, concurrency-begrænsninger i job-køen og geometri-hjælpere.
-4. **Produktions-Build**: Validerer at applikationen kan kompileres uden fejl.
-5. **9x Fuldautomatiserede Smoke-tests**:
-   - **`smoke:export:simple`**: Simpel video-trimning og transkodning.
-   - **`smoke:export:no-audio`**: Transkodning af videoer uden lydspor uden backend-nedbrud.
-   - **`smoke:export`**: Fuld transkodning med alle markeringstyper (tekst, cirkel, pil, freeze) kombineret.
-   - **`smoke:export:text`**: Pixel-baseret visual regression test for tekst-markeringer.
-   - **`smoke:export:circle`**: Pixel-baseret visual regression test for cirkel-markeringer.
-   - **`smoke:export:arrow`**: Pixel-baseret visual regression test for pil-markeringer.
-   - **`smoke:export:freeze`**: Tidsmæssig validering af frame-freeze varighed og frame-freeze præcision.
-   - **`smoke:export:annotations`**: Validering af kombineret HD-transkodning (1280x720).
-   - **`smoke:api:simple`**: Gennemtestning af det faktiske REST API (POST, statuspolling, timeout og download).
-6. **Browser E2E-tests (`playwright`)**: Afvikler automatiske browser- og viewport-tests i både desktop- og mobil-viewports for at validere det faktiske brugerflow og responsive elementer uden nedbrud.
-
----
-
-## 🎯 Visuel Overensstemmelse (Preview vs. Eksport)
-
-For at sikre, at det træneren ser på skærmen svarer bedst muligt til det, der eksporteres i videoen, deler previewet og eksport-servicen en centraliseret geometrimotor (`/shared/annotationGeometry.ts`):
-
-* **Cirkler**: Radii og tykkelser beregnes ud fra videoens faktiske højde, hvilket sikrer, at cirklen dækker det samme areal uanset skærmstørrelse.
-* **Pile**: Start- og slutkoordinater normaliseres og konverteres til absolutte SVG-vektorer, hvilket forhindrer skævvridning.
-* **Tekstbokse**: Tekststørrelser, baggrunds-paddings og rammer skaleres dynamisk i forhold til videoens højde, så der aldrig opstår uventede tekstombrydninger eller afskårne bogstaver.
-
-Vores smoke-tests bruger et avanceret, pixel-baseret regressionsbibliotek (`pixelmatch`), som udtrækker rå videoframer via FFmpeg og sammenligner dem direkte for at garantere visuel og geometrisk konsistens. På grund af potentielle forskelle i font-rendering, hardware-acceleration og codecs mellem forskellige browsere og servermiljøer, garanterer vi en ekstremt høj overensstemmelse snarere end en absolut 100% teoretisk pixel-perfekt ensartethed på tværs af alle tænkelige browser-klienter.
-
----
-
-## 🏛️ Systemarkitektur & Dataflow
-
-CoachClip er opbygget som en robust, fuldstændig integreret fuldstændig-stak applikation, der overholder følgende fire-trins behandlingskæde:
-
-```text
-[ 1. FRONTEND WIZARD FLOW ]
-  - Upload/Træk-og-slip -> IndexedDB
-  - Trimning (Start/Slut) -> Tegneværktøjer
-  - Annotationer: Tekst, Cirkel, Pil, Freeze (Frys)
-        │
-        ▼
-[ 2. API ENDPOINT (POST /api/exports) ]
-  - Multipart upload af kildevideo + JSON metadata
-  - Strict input-validering af klip-længder og annotations-overlap
-        │
-        ▼
-[ 3. JOB-KØ (ExportQueue) ]
-  - Concurrency Limit (MAX_CONCURRENT_EXPORTS=2)
-  - FIFO sequential processing af godkendte jobs
-        │
-        ▼
-[ 4. FFMPEG RENDERING ENGINE ]
-  - SVG-overlay generering for hver frame-annotation
-  - Trimning -> Annotations-brænding -> Freeze-bygning -> Audio-remap
-  - Rent og optimeret MP4 (H.264 / AAC) output gemt i ./tmp/exports
-```
-
----
-
-## ❄️ Freeze Frame & Lyd-Strategi (Lydbæring)
-
-For at sikre, at videoen ikke mister sin lyd eller fejler under frame-frysnings-perioder, anvender CoachClip en intelligent og stringent lyd- og billedstrategi i FFmpeg-pipelinen:
-
-1. **Undersøgelse af kildelyd**: Pipelinen analyserer først kildevideoen for at se, om der findes et lydspor. Hvis videoen ikke har noget lydspor, udelades lydsporet helt i eksporten for at forhindre transkodningsfejl.
-2. **Standardisering**: Hvis der findes et lydspor, tvinges formatet til 48kHz stereo (`-ar 48000 -ac 2`) i AAC for optimal kompatibilitet på tværs af platforme (Messenger, holdsport, etc.).
-3. **Fryse-behandling (Lyd-bæring)**: Under fryse-framer (hvor videoen fryses midlertidigt for at vise en annotation), splitter FFmpeg lyd og billede op. Videoen strækkes (frys), mens lyden enten pauses eller gøres lydløs under frysepunktet ved hjælp af præcise tidsbaserede filtre (`atrim`, `asetpts`, `concat`), hvilket sikrer, at lyden bagefter fortsætter synkront med videoafspilningen uden jitter eller codec-nedbrud.
-
----
-
-## 🐳 Docker Deployment & Driftsvejledning
-
-Applikationen er fuldt forberedt til container-baseret udrulning (f.eks. på Google Cloud Run) via den medfølgende multi-stage `Dockerfile`. 
-
-### Container Sikkerhed & Drift:
-* **Non-Root Bruger**: Containeren kører som den indbyggede, upriviligerede `node` bruger for at sikre højeste sikkerhedsniveau mod uautoriseret systemadgang.
-* **Integreret Sundhedstjek (`HEALTHCHECK`)**: Docker-daemon eller orkestreringsværktøjet overvåger automatisk backendens status på `/api/health`.
-
-### Driftskonfiguration via Miljøvariable (.env):
-Du kan finjustere containerens performance og ressourceforbrug ved at konfigurere følgende variabler:
-* `MAX_CONCURRENT_EXPORTS`: Standard er `2`. Angiver hvor mange FFmpeg processer, der må afvikles parallelt. Sæt til `1` under begrænsede CPU/RAM-forhold (f.eks. 1 vCPU Cloud Run) for at forebygge ressource-throttling.
-* `FFMPEG_TIMEOUT_SECONDS`: Standard er `600` (10 minutter). Dræber automatisk hængende transkodninger.
-* `OUTPUT_TTL_MINUTES`: Standard er `60` (1 time). Angiver hvor længe de færdige videoer ligger på disk, før de automatisk slettes.
-* `LOG_LEVEL`: Understøtter `error`, `warn`, `info`, og `debug` (styres via `LOG_LEVEL=info`).
-
-### Byg Docker-image:
-```bash
-docker build -t coachclip:mvp .
-```
-
-### Kør containeren lokalt:
-```bash
-docker run -p 3000:3000 -e LOG_LEVEL=debug -e MAX_CONCURRENT_EXPORTS=1 coachclip:mvp
-```
-
----
-
-## 🛠️ Kvalitetskontrol & Fuld Verifikation
-
-Projektet inkluderer en robust, automatiseret kvalitetssikringskæde (`verify`). Denne kommando udfører alt det nødvendige for at godkende en ny udgivelse:
-
-```bash
-npm run verify
-```
-
-Når du kører `verify`, afvikles følgende faser sekventielt:
-1. **Linter (`eslint`)**: Sikrer streng kodekvalitet, korrekt typesikkerhed og syntaksmæssig præcision.
-2. **Typecheck (`tsc`)**: Garanterer fuld type-sikkerhed på tværs af frontend og backend.
-3. **Enhedstests (`vitest`)**: Tester de underliggende matematiske formler, concurrency-begrænsninger i job-køen og geometri-hjælpere.
+3. **Enhedstests (`vitest`)**: Tester de underliggende matematiske formler, concurrency-begrænsninger i job-køen, hastighedsgrænser og geometri-hjælpere.
    * Kør kun enhedstests direkte med: `npm test`
 4. **Produktions-Build**: Validerer at applikationen kan kompileres uden fejl (`npm run build`).
 5. **9x Fuldautomatiserede Smoke-tests**:
@@ -163,7 +58,46 @@ Når du kører `verify`, afvikles følgende faser sekventielt:
 
 ---
 
-## 🎯 Visuel Overensstemmelse (Preview vs. Eksport)
+## 🎯 Produktionsparathed & Backend-Hærdning
+
+I denne opdatering er der foretaget en fokuseret og stringent hærdning af backend-arkitekturen til en kontrolleret pilotfase:
+
+### 1. Robust CORS-politik
+* **Udvikling**: Understøtter fleksibel adgang via konfigurerede origins.
+* **Produktion**: Kræver en eksplicit defineret origin via miljøvariablen `CORS_ORIGIN` (f.eks. `https://coachclip.com`). Serveren nægter at starte i produktion, hvis `CORS_ORIGIN` ikke er sat, eller hvis den er sat til det usikre wildcard `*`.
+
+### 2. Endpoint-specifik Rate Limiting med `Retry-After`
+For at beskytte serverressourcerne mod misbrug og overbelastning (f.eks. fra aggressive webcrawlere eller DDOS):
+* **Generel API rate limit**: 100 anmodninger per minut per IP.
+* **POST /api/exports limit**: Maksimalt 5 eksportoprettelser per minut per IP for at beskytte de tunge transkodningsprocesser.
+* **Retry-After Header**: Hvis en IP overskrider grænsen, afvises anmodningen med en HTTP 429-status, og der returneres en præcis `Retry-After` header med antallet af sekunder, klienten skal vente, før en ny anmodning kan behandles.
+
+### 3. Graceful Shutdown Flow
+Ved modtagelse af `SIGTERM` eller `SIGINT` (f.eks. under genstart eller skalering af Cloud Run-containere) udføres følgende sekvens:
+1. `exportQueue.stopNewJobs()` kaldes omgående, hvilket stopper indtaget af nye anmodninger (der efterfølgende afvises med en HTTP 503-status).
+2. HTTP-serveren stopper med at acceptere nye netværksforbindelser via `server.close()`.
+3. Der oprettes en fallback-sikkerhedstimer på 30 sekunder, hvorefter processen tvinges til at lukke (for at undgå hængende servere).
+4. Serveren venter aktivt på, at igangværende FFmpeg-processer færdiggør deres transkodning, hvorefter processen lukker rent med exit code 0.
+
+### 4. Sikker, Struktureret Logger med Sensitivitets-Redigering
+Der er implementeret en centraliseret JSON-logger (`/server/src/utils/logger.ts`) med følgende egenskaber:
+* **JSON i produktion**: Sikrer nem log-aggregering og fejlovervågning.
+* **Automatiske Redigeringsfiltre (Redaction)**: Loggeren fjerner automatisk følsomme oplysninger (såsom absolutte systemstier, rå filnavne, tokens og rå FFmpeg CLI-parametre) før logs skrives til konsollen for at forhindre utilsigtet datalækage.
+* **Konsistente niveauer**: Understøtter `error`, `warn`, `info`, og `debug`.
+
+### 5. Non-blocking Sundheds- og Parathedstjek (Health Checks)
+* **Ingen Synkron Eksekvering**: Kaldet til `execSync("ffmpeg")` er fjernet fra `/api/ready` og `/api/health` for at undgå trådblokering ved hyppige sundhedstjek.
+* **Boot-validering**: Tilgængeligheden af `ffmpeg` og `ffprobe` testes én gang ved serveropstart og caches derefter i hukommelsen.
+* **Systemmetrikker**: `/api/health` returnerer nu ikke-blokerende asynkron information om ledig diskplads, ledig systemhukommelse samt aktiv og ventende jobkø-status.
+
+### 6. Konsolideret CI/CD Pipeline
+For at fjerne duplikeret kode og overhead i GitHub Actions, er den oprindelige `docker.yml` lagt sammen med `verify.yml` i en samlet to-job pipeline:
+* **Job 1 (verify)**: Installerer afhængigheder, validerer kildekode (lint, typecheck), og afvikler alle enhedstests, smoke-tests og Playwright E2E-scenarier.
+* **Job 2 (docker)**: Bygger Docker-containeren, kører den i baggrunden, og verificerer liveness, readiness samt kører en helbredstest via containerens `/api/ready` endpoint.
+
+---
+
+## 🎯 Pilotfasens Rammer & Bevidste Begrænsninger
 
 CoachClip MVP er designet til at være en ultra-fokuseret, driftsstabil og lynhurtig løsning til taktisk videoanalyse. Følgende er en ærlig oversigt over systemets rammer og bevidste begrænsninger under pilotfasen:
 

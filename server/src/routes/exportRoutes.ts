@@ -54,6 +54,20 @@ const getOrigin = (req: Request) => {
 // 1. Create Export Job Endpoint
 exportRouter.post("/", upload.single("video"), async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
   const file = req.file;
+
+  if (!exportQueue.isAcceptingNewJobs()) {
+    if (file) {
+      try { fs.unlinkSync(file.path); } catch (e) {}
+    }
+    res.status(503).json({
+      error: {
+        code: "SERVER_SHUTTING_DOWN",
+        userMessage: "CoachClip er ved at genstarte. Prøv igen om et øjeblik."
+      }
+    });
+    return;
+  }
+
   const metadataStr = req.body.metadata;
 
   if (!file) {

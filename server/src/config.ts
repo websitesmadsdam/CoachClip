@@ -52,4 +52,7 @@ export function validateConfig() {
   if (process.env.NODE_ENV === "production" && config.e2eProcessingDelayMs > 0) {
     throw new Error("INVALID_CONFIG: E2E_PROCESSING_DELAY_MS must be 0 in production mode");
   }
+  if (process.env.NODE_ENV === "production" && (!config.corsOrigin || config.corsOrigin === "*")) {
+    throw new Error("INVALID_CONFIG: CORS_ORIGIN must be explicitly set and cannot be '*' in production mode");
+  }
 }
