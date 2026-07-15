@@ -5,11 +5,13 @@
 
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { execSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { exportRouter } from "./server/src/routes/exportRoutes";
 import { FileCleanupService } from "./server/src/services/fileCleanupService";
 import { config, validateConfig } from "./server/src/config";
+import { exportQueue } from "./server/src/services/exportQueue";
 
 async function startServer() {
   // Validate configuration before starting
@@ -30,12 +32,11 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     let ffmpegOk = false;
     let ffprobeOk = false;
-    let ffmpegVersion = "unknown";
+    let tempWritable = false;
     
     try {
-      const out = execSync("ffmpeg -version").toString();
+      execSync("ffmpeg -version");
       ffmpegOk = true;
-      ffmpegVersion = out.split("\n")[0] || "unknown";
     } catch (e) {
       console.error("FFmpeg healthcheck failed:", e);
     }
@@ -47,12 +48,22 @@ async function startServer() {
       console.error("FFprobe healthcheck failed:", e);
     }
 
+    try {
+      const testFile = path.join(config.tempDir, `.write-test-${Date.now()}`);
+      fs.writeFileSync(testFile, "test");
+      fs.unlinkSync(testFile);
+      tempWritable = true;
+    } catch (e) {
+      console.error("Temp directory write check failed:", e);
+    }
+
     res.json({
       status: "ok",
       ffmpeg: ffmpegOk,
       ffprobe: ffprobeOk,
-      version: ffmpegVersion,
-      service: "CoachClip MVP Renderer"
+      tempDirectoryWritable: tempWritable,
+      activeJobs: exportQueue.getActiveCount(),
+      queuedJobs: exportQueue.getQueuedCount()
     });
   });
 

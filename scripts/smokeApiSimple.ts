@@ -14,8 +14,9 @@ async function delay(ms: number) {
 }
 
 async function runApiSmokeTest() {
+  const customBaseUrl = process.env.SMOKE_API_BASE_URL;
   const PORT = "3009";
-  const baseUrl = `http://localhost:${PORT}`;
+  const baseUrl = customBaseUrl || `http://localhost:${PORT}`;
   const inputPath = path.resolve("test_input_api.mp4");
   const outputPath = path.resolve("test_output_api.mp4");
   let serverProc: any = null;
@@ -27,26 +28,30 @@ async function runApiSmokeTest() {
   if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
 
   try {
-    // 1. Start the test server
-    console.log(`Step 1: Spawning test server on port ${PORT}...`);
-    serverProc = spawn("npx", ["tsx", "server.ts"], {
-      shell: false,
-      detached: true,
-      env: {
-        ...process.env,
-        PORT,
-        NODE_ENV: "production",
-        TEMP_DIR: "./tmp/api_test_temp"
-      }
-    });
+    if (!customBaseUrl) {
+      // 1. Start the test server
+      console.log(`Step 1: Spawning test server on port ${PORT}...`);
+      serverProc = spawn("npx", ["tsx", "server.ts"], {
+        shell: false,
+        detached: true,
+        env: {
+          ...process.env,
+          PORT,
+          NODE_ENV: "production",
+          TEMP_DIR: "./tmp/api_test_temp"
+        }
+      });
 
-    // Capture server output for debugging if needed
-    serverProc.stdout.on("data", (data: any) => {
-      console.log(`[Server STDOUT] ${data.toString().trim()}`);
-    });
-    serverProc.stderr.on("data", (data: any) => {
-      console.error(`[Server STDERR] ${data.toString().trim()}`);
-    });
+      // Capture server output for debugging if needed
+      serverProc.stdout.on("data", (data: any) => {
+        console.log(`[Server STDOUT] ${data.toString().trim()}`);
+      });
+      serverProc.stderr.on("data", (data: any) => {
+        console.error(`[Server STDERR] ${data.toString().trim()}`);
+      });
+    } else {
+      console.log(`Step 1: Using existing test server at ${baseUrl}...`);
+    }
 
     // Wait for server to become healthy
     console.log("Waiting for server to become healthy...");
@@ -155,9 +160,10 @@ async function runApiSmokeTest() {
     // 5. Download the final output video
     console.log("Step 5: Downloading output video...");
     const downloadUrl = finalJobState.output.downloadUrl;
-    console.log("Download URL:", downloadUrl);
+    const finalDownloadUrl = downloadUrl.startsWith("http") ? downloadUrl : (baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl) + downloadUrl;
+    console.log("Download URL:", finalDownloadUrl);
 
-    const downloadRes = await fetch(downloadUrl);
+    const downloadRes = await fetch(finalDownloadUrl);
     if (!downloadRes.ok) {
       throw new Error(`Download failed with status ${downloadRes.status}`);
     }

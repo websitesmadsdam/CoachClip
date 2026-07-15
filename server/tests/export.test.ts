@@ -248,4 +248,115 @@ describe("CoachClip Backend MVP - Unit Tests", () => {
       }).toThrow();
     });
   });
+
+  describe("Freeze Validation Logic", () => {
+    interface Freeze {
+      type: "freeze";
+      time: number;
+      duration: number;
+    }
+    interface Clip {
+      startTime: number;
+      endTime: number;
+    }
+
+    const validateFreezes = (freezes: Freeze[], clip: Clip) => {
+      const sortedFreezes = [...freezes].sort((a, b) => a.time - b.time);
+      let lastFreezeTime = -999;
+      let cumulativeFreezeDur = 0;
+
+      for (const f of sortedFreezes) {
+        if (f.duration !== 2 && f.duration !== 3 && f.duration !== 5) {
+          return { isValid: false, error: "INVALID_FREEZE_DURATION" };
+        }
+        if (f.time < clip.startTime || f.time > clip.endTime) {
+          return { isValid: false, error: "INVALID_FREEZE_TIME" };
+        }
+        if (Math.abs(f.time - lastFreezeTime) < 0.05) {
+          return { isValid: false, error: "DUPLICATE_FREEZE" };
+        }
+        lastFreezeTime = f.time;
+        cumulativeFreezeDur += f.duration;
+      }
+
+      if (cumulativeFreezeDur > 30) {
+        return { isValid: false, error: "TOO_MUCH_FREEZE" };
+      }
+
+      return { isValid: true };
+    };
+
+    const clip = { startTime: 10, endTime: 40 };
+
+    it("should accept valid non-overlapping freezes", () => {
+      const freezes: Freeze[] = [
+        { type: "freeze", time: 15, duration: 3 },
+        { type: "freeze", time: 25, duration: 5 }
+      ];
+      const res = validateFreezes(freezes, clip);
+      expect(res.isValid).toBe(true);
+    });
+
+    it("should accept freeze at clip start and clip end", () => {
+      const freezes: Freeze[] = [
+        { type: "freeze", time: 10, duration: 2 },
+        { type: "freeze", time: 40, duration: 5 }
+      ];
+      const res = validateFreezes(freezes, clip);
+      expect(res.isValid).toBe(true);
+    });
+
+    it("should reject duplicates at the exact same time", () => {
+      const freezes: Freeze[] = [
+        { type: "freeze", time: 20, duration: 3 },
+        { type: "freeze", time: 20, duration: 3 }
+      ];
+      const res = validateFreezes(freezes, clip);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe("DUPLICATE_FREEZE");
+    });
+
+    it("should reject two freezes that are in very close proximity (within 0.05 seconds)", () => {
+      const freezes: Freeze[] = [
+        { type: "freeze", time: 20, duration: 3 },
+        { type: "freeze", time: 20.03, duration: 2 }
+      ];
+      const res = validateFreezes(freezes, clip);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe("DUPLICATE_FREEZE");
+    });
+
+    it("should reject freeze with invalid duration", () => {
+      const freezes: Freeze[] = [
+        { type: "freeze", time: 15, duration: 4 }
+      ];
+      const res = validateFreezes(freezes, clip);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe("INVALID_FREEZE_DURATION");
+    });
+
+    it("should reject freeze that lies outside clip range", () => {
+      const freezes: Freeze[] = [
+        { type: "freeze", time: 5, duration: 3 }
+      ];
+      const res = validateFreezes(freezes, clip);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe("INVALID_FREEZE_TIME");
+    });
+
+    it("should reject when cumulative freeze duration exceeds 30 seconds", () => {
+      const freezes: Freeze[] = [
+        { type: "freeze", time: 12, duration: 5 },
+        { type: "freeze", time: 18, duration: 5 },
+        { type: "freeze", time: 24, duration: 5 },
+        { type: "freeze", time: 30, duration: 5 },
+        { type: "freeze", time: 35, duration: 5 },
+        { type: "freeze", time: 38, duration: 5 },
+        { type: "freeze", time: 39, duration: 5 } // total 35s
+      ];
+      const res = validateFreezes(freezes, clip);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe("TOO_MUCH_FREEZE");
+    });
+  });
 });

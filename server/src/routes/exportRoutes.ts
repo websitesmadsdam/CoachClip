@@ -178,6 +178,38 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
     return;
   }
 
+  // Comprehensive freeze validation pass
+  const freezeAnnos = metadata.annotations.filter((a: any) => a.type === "freeze");
+  const sortedFreezes = [...freezeAnnos].sort((a, b) => a.time - b.time);
+  let lastFreezeTime = -999;
+  let cumulativeFreezeDur = 0;
+
+  for (const f of sortedFreezes) {
+    if (f.duration !== 2 && f.duration !== 3 && f.duration !== 5) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: "INVALID_FREEZE_DURATION", message: "Varighed af frysebillede skal være 2, 3 eller 5 sekunder." });
+      return;
+    }
+    if (f.time < metadata.clip.startTime || f.time > metadata.clip.endTime) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: "INVALID_FREEZE_TIME", message: "Frysepunktet ligger uden for klippets tidsramme." });
+      return;
+    }
+    if (Math.abs(f.time - lastFreezeTime) < 0.05) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: "DUPLICATE_FREEZE", message: "To frysepunkter må ikke ligge på samme kildetidspunkt eller meget tæt på hinanden." });
+      return;
+    }
+    lastFreezeTime = f.time;
+    cumulativeFreezeDur += f.duration;
+  }
+
+  if (cumulativeFreezeDur > 30) {
+    fs.unlinkSync(file.path);
+    res.status(400).json({ error: "TOO_MUCH_FREEZE", message: "Den samlede frysetid må højst være 30 sekunder." });
+    return;
+  }
+
   let textCount = 0;
   let svgCount = 0;
   let totalFreezeDuration = 0;

@@ -491,12 +491,11 @@ export class FfmpegExportService {
             ];
 
             if (hasAudio) {
-              filterString += "; [0:a]aresample=async=1,aformat=sample_rates=44100:channel_layouts=stereo[a_out]";
+              filterString += "; [0:a]aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[a_out]";
               finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac");
             } else {
-              // Generate silent audio inline to bypass variable audio layout bugs
-              filterString += "; anullsrc=channel_layout=stereo:sample_rate=44100[a_out]";
-              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac", "-shortest");
+              // Input without audio -> output without audio
+              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]");
             }
 
             finalArgs.push(
@@ -518,11 +517,11 @@ export class FfmpegExportService {
             ];
 
             if (hasAudio) {
-              filterString += "; [0:a]aresample=async=1,aformat=sample_rates=44100:channel_layouts=stereo[a_out]";
+              filterString += "; [0:a]aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[a_out]";
               finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac");
             } else {
-              filterString += "; anullsrc=channel_layout=stereo:sample_rate=44100[a_out]";
-              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]", "-map", "[a_out]", "-c:a", "aac", "-shortest");
+              // Input without audio -> output without audio
+              finalArgs.push("-filter_complex", filterString, "-map", "[v_out]");
             }
 
             finalArgs.push(
@@ -574,24 +573,41 @@ export class FfmpegExportService {
           ], jobId);
 
           // 5. Render freeze MP4 of exactly `seg.duration` length from the static annotated image
-          await runProcess("ffmpeg", [
+          const freezeArgs = [
             "-loop", "1",
             "-t", String(seg.duration),
             "-i", annotatedImgFile,
-            "-f", "lavfi",
-            "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-            "-map", "0:v:0",
-            "-map", "1:a:0",
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            "-r", String(fps),
-            "-c:a", "aac",
-            "-ar", "44100",
-            "-ac", "2",
+          ];
+
+          if (hasAudio) {
+            freezeArgs.push(
+              "-f", "lavfi",
+              "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+              "-map", "0:v:0",
+              "-map", "1:a:0",
+              "-c:v", "libx264",
+              "-pix_fmt", "yuv420p",
+              "-r", String(fps),
+              "-c:a", "aac",
+              "-ar", "48000",
+              "-ac", "2"
+            );
+          } else {
+            freezeArgs.push(
+              "-map", "0:v:0",
+              "-c:v", "libx264",
+              "-pix_fmt", "yuv420p",
+              "-r", String(fps)
+            );
+          }
+
+          freezeArgs.push(
             "-t", String(seg.duration),
             "-y",
             segOutFile
-          ], jobId);
+          );
+
+          await runProcess("ffmpeg", freezeArgs, jobId);
         }
 
         segmentFiles.push(segOutFile);

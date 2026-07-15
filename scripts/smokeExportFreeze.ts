@@ -119,8 +119,43 @@ async function runFreezeSmokeTest() {
     console.log(`Freeze frame pixel difference during freeze: ${freezeDiff.diffPixels} pixels`);
 
     if (freezeDiff.diffPixels !== 0) {
-      throw new Error(`Expected frame to be static/frozen during freeze period, but got ${freezeDiff.diffPixels} mismatched pixels.`);
+      throw new Error("Expected frame to be static/frozen during freeze period, but got mismatched pixels.");
     }
+
+    console.log("Step 6.5: Verifying audio parameters (sample rate, channel layout, audio presence)...");
+    const audioProbe = execSync(
+      `ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,sample_rate,channels,channel_layout -of json "${annotatedPath}"`
+    ).toString();
+    const audioData = JSON.parse(audioProbe);
+    const audioStream = audioData.streams?.[0];
+
+    if (!audioStream) {
+      throw new Error("Expected an audio stream in the annotated freeze output, but none was found!");
+    }
+    console.log("Audio Stream properties:", audioStream);
+
+    if (audioStream.codec_name !== "aac") {
+      throw new Error(`Expected audio codec to be aac, but got: ${audioStream.codec_name}`);
+    }
+    if (Number(audioStream.sample_rate) !== 48000) {
+      throw new Error(`Expected audio sample rate to be 48000 Hz, but got: ${audioStream.sample_rate}`);
+    }
+    const isStereo = audioStream.channel_layout === "stereo" || Number(audioStream.channels) === 2;
+    if (!isStereo) {
+      throw new Error(`Expected audio channel layout to be stereo (2 channels), but got: ${audioStream.channel_layout} (${audioStream.channels} channels)`);
+    }
+
+    // Verify audio presence during freeze frame (from 2.0s to 4.0s) by exporting a 1s snippet and checking it has audio
+    const testSnippetPath = path.join(tempDir, "freeze_audio_snippet.mp4");
+    execSync(`ffmpeg -ss 2.5 -t 1.0 -i "${annotatedPath}" -c:a copy -y "${testSnippetPath}"`, { stdio: "ignore" });
+    const snippetProbe = execSync(
+      `ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,sample_rate -of json "${testSnippetPath}"`
+    ).toString();
+    const snippetData = JSON.parse(snippetProbe);
+    if (!snippetData.streams?.[0]) {
+      throw new Error("Expected audio stream to be preserved during freeze period snippet!");
+    }
+    console.log("Audio stream successfully verified during freeze period.");
 
     console.log("\n--- SMOKE TEST: FREEZE FRAME ANNOTATIONS PASSED SUCCESSFULLY! ---");
   } catch (err: any) {
