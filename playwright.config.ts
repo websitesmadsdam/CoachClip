@@ -23,7 +23,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "PORT=3001 npm run dev",
+    command: "PORT=3001 npm run dev > e2e-server.log 2>&1",
     url: `${E2E_ORIGIN}/api/ready`,
     reuseExistingServer: false,
     stdout: "ignore",
@@ -38,6 +38,12 @@ export default defineConfig({
       MAX_CONCURRENT_EXPORTS: "2",
       FFMPEG_TIMEOUT_SECONDS: "120",
       OUTPUT_TTL_MINUTES: "1",
+      RATE_LIMIT_EXPORT_CREATE: "50",
+      RATE_LIMIT_EXPORT_CREATE_WINDOW_SECONDS: "60",
+      RATE_LIMIT_STATUS: "1000",
+      RATE_LIMIT_STATUS_WINDOW_SECONDS: "60",
+      RATE_LIMIT_DOWNLOAD: "100",
+      RATE_LIMIT_DOWNLOAD_WINDOW_SECONDS: "60",
     },
   },
 });

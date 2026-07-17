@@ -87,7 +87,7 @@ test.describe("CoachClip - Export Cancellation", () => {
     await page.locator("button:has-text('Gem og eksportér')").click();
 
     // 8. Privacy Warning Dialogue
-    await expect(page.locator("h3:has-text('Beskyttelse af dine videoer')")).toBeVisible();
+    await expect(page.getByText("Beskyttelse af dine videoer")).toBeVisible();
 
     // Setup listener to intercept the export job creation and cancellation
     let jobId: string | null = null;
@@ -115,7 +115,9 @@ test.describe("CoachClip - Export Cancellation", () => {
     // Start real export
     const createPromise = waitForExportCreation(page);
 
-    await page.locator("button:has-text('Fortsæt og eksporter')").click();
+    await page.getByRole("button", { name: "Fortsæt og eksporter" }).click();
+
+    await expect(page.getByText("Beskyttelse af dine videoer")).not.toBeVisible();
 
     const observation = await createPromise;
 

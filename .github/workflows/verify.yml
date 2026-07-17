@@ -42,6 +42,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            e2e-server.log
           if-no-files-found: ignore
 
   docker:

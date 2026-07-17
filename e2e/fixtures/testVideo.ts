@@ -25,11 +25,17 @@ export type ExportCreateObservation = {
 export async function waitForExportCreation(
   page: Page
 ): Promise<ExportCreateObservation> {
-  const response = await page.waitForResponse(
-    candidate =>
-      candidate.request().method() === "POST" &&
-      candidate.url().includes("/api/exports")
-  );
+  const response = await page.waitForResponse(candidate => {
+    try {
+      const url = new URL(candidate.url());
+      return (
+        candidate.request().method() === "POST" &&
+        url.pathname === "/api/exports"
+      );
+    } catch {
+      return false;
+    }
+  });
 
   return {
     requestUrl: response.url(),

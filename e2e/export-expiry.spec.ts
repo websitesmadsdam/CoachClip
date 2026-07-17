@@ -87,7 +87,7 @@ test.describe("CoachClip - Export Expiry TTL", () => {
     await page.locator("button:has-text('Gem og eksportér')").click();
 
     // 8. Privacy Dialogue -> Start
-    await expect(page.locator("h3:has-text('Beskyttelse af dine videoer')")).toBeVisible();
+    await expect(page.getByText("Beskyttelse af dine videoer")).toBeVisible();
 
     let jobId: string | null = null;
     page.on("response", async (response) => {
@@ -105,7 +105,9 @@ test.describe("CoachClip - Export Expiry TTL", () => {
 
     const createPromise = waitForExportCreation(page);
 
-    await page.locator("button:has-text('Fortsæt og eksporter')").click();
+    await page.getByRole("button", { name: "Fortsæt og eksporter" }).click();
+
+    await expect(page.getByText("Beskyttelse af dine videoer")).not.toBeVisible();
 
     const observation = await createPromise;
 

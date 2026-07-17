@@ -126,11 +126,13 @@ test.describe("CoachClip - Full E2E Export Flow", () => {
     await page.locator("button:has-text('Gem og eksportér')").click();
 
     // 9. Privacy Warning Dialogue
-    await expect(page.locator("h3:has-text('Beskyttelse af dine videoer')")).toBeVisible();
+    await expect(page.getByText("Beskyttelse af dine videoer")).toBeVisible();
 
     const createPromise = waitForExportCreation(page);
 
-    await page.locator("button:has-text('Fortsæt og eksporter')").click();
+    await page.getByRole("button", { name: "Fortsæt og eksporter" }).click();
+
+    await expect(page.getByText("Beskyttelse af dine videoer")).not.toBeVisible();
 
     const observation = await createPromise;
 
