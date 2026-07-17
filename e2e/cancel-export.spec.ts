@@ -139,8 +139,15 @@ Body: ${observation.responseBody}`
     // Wait until progress loader starts (progress >= 0%)
     await expect(page.locator("h3:has-text('Uploader video...')").or(page.locator("h3:has-text('Opretter dit taktikklip')"))).toBeVisible({ timeout: 15000 });
 
-    // Wait 1 second to let some rendering happen, then click cancellation
-    await page.waitForTimeout(1000);
+    // Poll backend directly until the job is queued or processing
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/exports/${jobId}`);
+        const body = await response.json();
+        return body.status;
+      }, { timeout: 10000 })
+      .toMatch(/queued|processing/);
+
     console.log("Clicking 'Afbryd eksport' button...");
     await page.locator("button:has-text('Afbryd eksport')").click();
 
@@ -151,16 +158,13 @@ Body: ${observation.responseBody}`
     // Confirm that the DELETE route was triggered
     expect(deleteFired).toBe(true);
 
-    // Query backend API directly using playwright request context to assert job status is indeed cancelled
-    if (jobId) {
-      console.log(`Directly querying backend status of job: ${jobId}`);
-      const statusRes = await request.get(`/api/exports/${jobId}`);
-      expect(statusRes.ok()).toBe(true);
-      const statusJson = await statusRes.json();
-      console.log("Direct status API response:", statusJson);
-      expect(statusJson.status).toBe("cancelled");
-    } else {
-      throw new Error("Could not intercept a valid jobId to perform backend assertion.");
-    }
+    // Poll backend to verify job status is indeed cancelled
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/exports/${jobId}`);
+        const body = await response.json();
+        return body.status;
+      }, { timeout: 5000 })
+      .toBe("cancelled");
   });
 });

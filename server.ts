@@ -97,8 +97,17 @@ async function startServer() {
 
   // Custom CORS Middleware
   app.use((req, res, next) => {
-    const origin = config.corsOrigin || "*";
-    res.setHeader("Access-Control-Allow-Origin", origin);
+    const allowedOrigin = config.corsOrigin || "*";
+    const requestOrigin = req.headers.origin;
+
+    if (allowedOrigin === "*") {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    } else if (requestOrigin === allowedOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    } else {
+      // Unknown or non-matching origin: do not set Access-Control-Allow-Origin header
+    }
+
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     if (req.method === "OPTIONS") {

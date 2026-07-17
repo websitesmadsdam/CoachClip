@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const E2E_ORIGIN = "http://127.0.0.1:3001";
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 60000,
@@ -9,7 +11,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "line",
   use: {
-    baseURL: "http://localhost:3001",
+    baseURL: E2E_ORIGIN,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -22,7 +24,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "PORT=3001 npm run dev",
-    url: "http://localhost:3001/api/health",
+    url: `${E2E_ORIGIN}/api/ready`,
     reuseExistingServer: false,
     stdout: "ignore",
     stderr: "pipe",
@@ -31,7 +33,7 @@ export default defineConfig({
       NODE_ENV: "test",
       IS_E2E: "true",
       E2E_TEST_MODE: "true",
-      CORS_ORIGIN: "http://localhost:3001",
+      CORS_ORIGIN: E2E_ORIGIN,
       E2E_PROCESSING_DELAY_MS: "3000",
       MAX_CONCURRENT_EXPORTS: "2",
       FFMPEG_TIMEOUT_SECONDS: "120",
