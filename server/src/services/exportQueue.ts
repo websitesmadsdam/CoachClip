@@ -16,12 +16,18 @@ type QueueItem = {
   tempDir: string;
 };
 
-class ExportQueue {
+export class ExportQueue {
   private queue: QueueItem[] = [];
   private activeJobs = new Set<string>();
   private maxConcurrency = Number(process.env.MAX_CONCURRENT_EXPORTS || "2");
   private acceptingNewJobs = true;
   private processingEnabled = true;
+
+  constructor(options?: { maxConcurrency?: number }) {
+    if (options?.maxConcurrency !== undefined) {
+      this.maxConcurrency = options.maxConcurrency;
+    }
+  }
 
   public stopNewJobs(): void {
     this.acceptingNewJobs = false;

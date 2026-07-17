@@ -87,12 +87,23 @@ jobs:
           docker logs coachclip-ci
           exit 1
 
+      - name: Install FFmpeg tools for host smoke validation
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
       - name: Run API Smoke Test against Container
         env:
           SMOKE_API_BASE_URL: http://127.0.0.1:3000
         run: |
           npm ci
           npx tsx scripts/smokeApiSimple.ts
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs coachclip-ci || true
 
       - name: Stop Container
         if: always()

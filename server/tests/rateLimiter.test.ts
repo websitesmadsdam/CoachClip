@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 
 // Replicate rate limiting logic to test it in isolation
 describe("Rate Limiting & Retry-After", () => {
