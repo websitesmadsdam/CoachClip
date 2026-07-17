@@ -1,9 +1,18 @@
 import { test, expect } from "@playwright/test";
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { TEST_VIDEO } from "./fixtures/testVideo";
 
 test.describe("CoachClip - Export Expiry TTL", () => {
-  test("should return HTTP 410 Gone when trying to download an expired/deleted export", async ({ page, request }) => {
+  test("returns 410 when completed output file is missing", async ({ page, request }) => {
+    // Validate actual duration of the test video before proceeding
+    const actualDurationStr = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${TEST_VIDEO.path}"`
+    ).toString().trim();
+    const actualDuration = parseFloat(actualDurationStr);
+    expect(actualDuration).toBeGreaterThanOrEqual(TEST_VIDEO.trimEnd);
+
     // 1. Navigate to home
     await page.goto("/");
     await page.locator("button:has-text('Nyt analyseklip')").first().click();
@@ -48,7 +57,18 @@ test.describe("CoachClip - Export Expiry TTL", () => {
       }
     });
 
+    const createResponsePromise = page.waitForResponse(
+      response =>
+        response.url().includes("/api/exports") &&
+        response.request().method() === "POST"
+    );
+
     await page.locator("button:has-text('Fortsæt og eksporter')").click();
+
+    const createResponse = await createResponsePromise;
+    const responseStatus = createResponse.status();
+    const body = await createResponse.text();
+    expect(responseStatus, `POST /api/exports failed with status ${responseStatus}: ${body}`).toBe(201);
 
     // 9. Wait for completion
     await expect(page.locator("h3:has-text('Dit klip er klar!')")).toBeVisible({ timeout: 60000 });
@@ -63,6 +83,12 @@ test.describe("CoachClip - Export Expiry TTL", () => {
     expect(statusRes.ok()).toBe(true);
     const statusData = await statusRes.json();
     expect(statusData.status).toBe("completed");
+
+    // Prove download BEFORE expiry works
+    const preDownloadUrl = `/api/exports/${jobId}/download`;
+    console.log(`Testing pre-expiry download URL: ${preDownloadUrl}`);
+    const preDownloadRes = await request.get(preDownloadUrl);
+    expect(preDownloadRes.status()).toBe(200);
 
     // 11. Simulate Expiration/TTL by deleting the output file from the server's `TEMP_DIR/exports` folder
     const tempDir = process.env.TEMP_DIR || "./tmp";

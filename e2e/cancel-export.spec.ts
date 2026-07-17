@@ -1,7 +1,16 @@
 import { test, expect } from "@playwright/test";
+import { execSync } from "child_process";
+import { TEST_VIDEO } from "./fixtures/testVideo";
 
 test.describe("CoachClip - Export Cancellation", () => {
   test("should successfully cancel an active export and clean up the job on the backend", async ({ page, request }) => {
+    // Validate actual duration of the test video before proceeding
+    const actualDurationStr = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${TEST_VIDEO.path}"`
+    ).toString().trim();
+    const actualDuration = parseFloat(actualDurationStr);
+    expect(actualDuration).toBeGreaterThanOrEqual(TEST_VIDEO.trimEnd);
+
     page.on("console", (msg) => console.log("PAGE LOG:", msg.text()));
     
     // 1. Open home page and proceed to video select screen
@@ -58,7 +67,18 @@ test.describe("CoachClip - Export Cancellation", () => {
     });
 
     // Start real export
+    const createResponsePromise = page.waitForResponse(
+      response =>
+        response.url().includes("/api/exports") &&
+        response.request().method() === "POST"
+    );
+
     await page.locator("button:has-text('Fortsæt og eksporter')").click();
+
+    const createResponse = await createResponsePromise;
+    const responseStatus = createResponse.status();
+    const body = await createResponse.text();
+    expect(responseStatus, `POST /api/exports failed with status ${responseStatus}: ${body}`).toBe(201);
 
     // Wait until progress loader starts (progress >= 0%)
     await expect(page.locator("h3:has-text('Uploader video...')").or(page.locator("h3:has-text('Opretter dit taktikklip')"))).toBeVisible({ timeout: 15000 });

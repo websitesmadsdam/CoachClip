@@ -84,7 +84,7 @@ export function validateConfig() {
   if (isNaN(config.shutdownGracePeriodSeconds) || config.shutdownGracePeriodSeconds <= 0) {
     throw new Error("INVALID_CONFIG: SHUTDOWN_GRACE_PERIOD_SECONDS must be a positive number");
   }
-  if (process.env.NODE_ENV === "production" && config.e2eProcessingDelayMs > 0) {
+  if (process.env.NODE_ENV === "production" && config.e2eProcessingDelayMs > 0 && process.env.IS_E2E !== "true") {
     throw new Error("INVALID_CONFIG: E2E_PROCESSING_DELAY_MS must be 0 in production mode");
   }
   if (process.env.NODE_ENV === "production" && (!config.corsOrigin || config.corsOrigin === "*")) {

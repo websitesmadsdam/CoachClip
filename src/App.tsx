@@ -456,7 +456,7 @@ export default function App() {
                   const demoFile = new File([], "Demo_Basketball_Video.mp4");
                   setSelectedFile(demoFile);
                   setVideoSourceSafely(DEFAULT_VIDEO_URL);
-                  setVideoDuration(2);
+                  setVideoDuration(8);
                   const newProj: CoachClipProject = {
                     id: "proj_" + Date.now(),
                     title: "Uden titel",
@@ -464,20 +464,20 @@ export default function App() {
                     updatedAt: new Date().toISOString(),
                     sourceVideo: {
                       fileName: "Demo_Basketball_Video.mp4",
-                      duration: 2,
+                      duration: 8,
                       size: 0,
                       width: 640,
                       height: 360
                     },
                     clip: {
-                      startTime: 0,
-                      endTime: 2
+                      startTime: 1,
+                      endTime: 6
                     },
                     annotations: [],
                     exportStatus: "not_exported"
                   };
                   setActiveProject(newProj);
-                  setTrimRange({ startTime: 0, endTime: 2 });
+                  setTrimRange({ startTime: 1, endTime: 6 });
                   setEditorStep("trim");
                 }}
                 onBack={() => setEditorStep("idle")}

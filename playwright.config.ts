@@ -10,7 +10,9 @@ export default defineConfig({
   reporter: "line",
   use: {
     baseURL: "http://localhost:3001",
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
   },
   projects: [
     {
@@ -26,7 +28,13 @@ export default defineConfig({
     stderr: "pipe",
     env: {
       PORT: "3001",
+      NODE_ENV: "test",
+      IS_E2E: "true",
+      CORS_ORIGIN: "http://127.0.0.1:3001",
       E2E_PROCESSING_DELAY_MS: "3000",
+      MAX_CONCURRENT_EXPORTS: "2",
+      FFMPEG_TIMEOUT_SECONDS: "120",
+      OUTPUT_TTL_MINUTES: "1",
     },
   },
 });

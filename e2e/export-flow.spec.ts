@@ -1,9 +1,17 @@
 import { test, expect } from "@playwright/test";
 import { execSync } from "child_process";
 import fs from "fs";
+import { TEST_VIDEO } from "./fixtures/testVideo";
 
 test.describe("CoachClip - Full E2E Export Flow", () => {
   test("should complete the entire pipeline from stock video to ffprobe-validated download", async ({ page }) => {
+    // Validate actual duration of the test video before proceeding
+    const actualDurationStr = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${TEST_VIDEO.path}"`
+    ).toString().trim();
+    const actualDuration = parseFloat(actualDurationStr);
+    expect(actualDuration).toBeGreaterThanOrEqual(TEST_VIDEO.trimEnd);
+
     // 1. Open home page
     await page.goto("/");
     await expect(page.locator("h2").first()).toContainText("Find situationen.");
@@ -73,7 +81,19 @@ test.describe("CoachClip - Full E2E Export Flow", () => {
 
     // 9. Privacy Warning Dialogue
     await expect(page.locator("h3:has-text('Beskyttelse af dine videoer')")).toBeVisible();
+
+    const createResponsePromise = page.waitForResponse(
+      response =>
+        response.url().includes("/api/exports") &&
+        response.request().method() === "POST"
+    );
+
     await page.locator("button:has-text('Fortsæt og eksporter')").click();
+
+    const createResponse = await createResponsePromise;
+    const responseStatus = createResponse.status();
+    const body = await createResponse.text();
+    expect(responseStatus, `POST /api/exports failed with status ${responseStatus}: ${body}`).toBe(201);
 
     // 10. Export Screen (polling loop)
     await expect(page.locator("h3:has-text('Uploader video...')").or(page.locator("h3:has-text('Opretter dit taktikklip')"))).toBeVisible({ timeout: 15000 });
