@@ -64,7 +64,7 @@ export function redactString(str: string): string {
   return redacted;
 }
 
-function sanitizeValue(key: string, val: any): any {
+function sanitizeValue(key: string, val: unknown): unknown {
   if (typeof val === "string") {
     return redactString(val);
   }
@@ -80,23 +80,24 @@ export class Logger {
     this.jobId = jobId;
   }
 
-  private log(level: LogLevel, message: string, ...args: any[]) {
+  private log(level: LogLevel, message: string, ...args: unknown[]) {
     if (LOG_LEVELS[level] <= getLogLevel()) {
       const timestamp = new Date().toISOString();
       const isProd = process.env.NODE_ENV === "production";
       let jobId = this.jobId;
 
       // Extract metadata or allowed keys from args
-      const meta: Record<string, any> = {};
+      const meta: Record<string, unknown> = {};
       for (const arg of args) {
         if (arg && typeof arg === "object") {
+          const record = arg as Record<string, unknown>;
           for (const key of ALLOWED_KEYS) {
-            if (arg[key] !== undefined) {
-              meta[key] = arg[key];
+            if (record[key] !== undefined) {
+              meta[key] = record[key];
             }
           }
-          if (!jobId && arg.jobId) {
-            jobId = arg.jobId;
+          if (!jobId && typeof record.jobId === "string") {
+            jobId = record.jobId;
           }
         }
       }
@@ -104,7 +105,7 @@ export class Logger {
       const redactedMessage = redactString(message);
 
       if (isProd) {
-        const logObj: Record<string, any> = {
+        const logObj: Record<string, unknown> = {
           timestamp,
           level,
           event: redactedMessage,
@@ -128,19 +129,19 @@ export class Logger {
     }
   }
 
-  public error(message: string, ...args: any[]) {
+  public error(message: string, ...args: unknown[]) {
     this.log("error", message, ...args);
   }
 
-  public warn(message: string, ...args: any[]) {
+  public warn(message: string, ...args: unknown[]) {
     this.log("warn", message, ...args);
   }
 
-  public info(message: string, ...args: any[]) {
+  public info(message: string, ...args: unknown[]) {
     this.log("info", message, ...args);
   }
 
-  public debug(message: string, ...args: any[]) {
+  public debug(message: string, ...args: unknown[]) {
     this.log("debug", message, ...args);
   }
 }

@@ -42,7 +42,7 @@ test.describe("CoachClip - Export Expiry TTL", () => {
           const body = await response.json();
           jobId = body.jobId;
           console.log("Intercepted created jobId:", jobId);
-        } catch (e) {
+        } catch {
           // ignore
         }
       }

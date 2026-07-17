@@ -14,6 +14,7 @@ import { exportJobService } from "../services/exportJobService";
 import { FfmpegExportService } from "../services/ffmpegExportService";
 import { exportQueue } from "../services/exportQueue";
 import { ExportRequestMetadata } from "../types/exportTypes";
+import { FreezeAnnotation } from "../../../src/types";
 
 import { config } from "../config";
 
@@ -193,8 +194,8 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
   }
 
   // Comprehensive freeze validation pass
-  const freezeAnnos = metadata.annotations.filter((a: any) => a.type === "freeze") as any[];
-  const sortedFreezes = [...freezeAnnos].sort((a: any, b: any) => a.time - b.time);
+  const freezeAnnos = metadata.annotations.filter((a): a is FreezeAnnotation => a.type === "freeze");
+  const sortedFreezes = [...freezeAnnos].sort((a, b) => a.time - b.time);
   let lastFreezeTime = -999;
   let cumulativeFreezeDur = 0;
 

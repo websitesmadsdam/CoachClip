@@ -43,7 +43,7 @@ async function isTempWritableAsync(tempDir: string): Promise<boolean> {
     await fs.promises.writeFile(testFile, "test");
     await fs.promises.unlink(testFile);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
