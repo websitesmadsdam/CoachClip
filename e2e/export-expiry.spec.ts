@@ -2,10 +2,32 @@ import { test, expect } from "@playwright/test";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { TEST_VIDEO } from "./fixtures/testVideo";
+import { TEST_VIDEO, waitForExportCreation } from "./fixtures/testVideo";
 
 test.describe("CoachClip - Export Expiry TTL", () => {
   test("returns 410 when completed output file is missing", async ({ page, request }) => {
+    // Register event listeners to capture and log API errors
+    page.on("requestfailed", req => {
+      if (req.url().includes("/api/")) {
+        console.error(
+          `[API REQUEST FAILED] ${req.method()} ${req.url()}: ` +
+          `${req.failure()?.errorText}`
+        );
+      }
+    });
+
+    page.on("response", async res => {
+      if (
+        res.url().includes("/api/") &&
+        res.status() >= 400
+      ) {
+        console.error(
+          `[API RESPONSE ERROR] ${res.status()} ${res.url()}: ` +
+          `${await res.text()}`
+        );
+      }
+    });
+
     // Validate actual duration of the test video before proceeding
     const actualDurationStr = execSync(
       `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${TEST_VIDEO.path}"`
@@ -22,6 +44,30 @@ test.describe("CoachClip - Export Expiry TTL", () => {
 
     // 3. Wizard Trimming -> Next
     await expect(page.locator("h2:has-text('Find situationen')")).toBeVisible({ timeout: 10000 });
+
+    // Verify video element load state
+    const video = page.locator("video");
+    await expect(video).toBeVisible();
+
+    const videoState = await video.evaluate((element: HTMLVideoElement) => ({
+      readyState: element.readyState,
+      duration: element.duration,
+      videoWidth: element.videoWidth,
+      videoHeight: element.videoHeight,
+      currentSrc: element.currentSrc,
+      errorCode: element.error?.code ?? null,
+      errorMessage: element.error?.message ?? null,
+    }));
+
+    if (videoState.errorCode === null) {
+      expect(videoState.readyState).toBeGreaterThanOrEqual(1);
+      expect(videoState.duration).toBeGreaterThanOrEqual(TEST_VIDEO.trimEnd);
+      expect(videoState.videoWidth).toBe(640);
+      expect(videoState.videoHeight).toBe(360);
+    } else {
+      console.warn(`Video format support check skipped because browser runtime reported error ${videoState.errorCode}: ${videoState.errorMessage}`);
+    }
+
     await page.locator("button:has-text('Næste: Finjustering')").click();
 
     // 4. Fine-Tune -> Next
@@ -57,18 +103,28 @@ test.describe("CoachClip - Export Expiry TTL", () => {
       }
     });
 
-    const createResponsePromise = page.waitForResponse(
-      response =>
-        response.url().includes("/api/exports") &&
-        response.request().method() === "POST"
-    );
+    const createPromise = waitForExportCreation(page);
 
     await page.locator("button:has-text('Fortsæt og eksporter')").click();
 
-    const createResponse = await createResponsePromise;
-    const responseStatus = createResponse.status();
-    const body = await createResponse.text();
-    expect(responseStatus, `POST /api/exports failed with status ${responseStatus}: ${body}`).toBe(201);
+    const observation = await createPromise;
+
+    expect(
+      observation.status,
+      `POST /api/exports failed.
+URL: ${observation.requestUrl}
+Status: ${observation.status}
+Content-Type: ${observation.contentType}
+Body: ${observation.responseBody}`
+    ).toBe(202);
+
+    const bodyObj = JSON.parse(observation.responseBody);
+    expect(bodyObj).toMatchObject({
+      status: "queued",
+    });
+    expect(typeof bodyObj.jobId).toBe("string");
+    expect(bodyObj.jobId.length).toBeGreaterThan(0);
+    jobId = bodyObj.jobId;
 
     // 9. Wait for completion
     await expect(page.locator("h3:has-text('Dit klip er klar!')")).toBeVisible({ timeout: 60000 });

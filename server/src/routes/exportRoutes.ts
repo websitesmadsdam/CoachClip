@@ -334,7 +334,7 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
   exportQueue.enqueue(jobId, metadata.projectId, file.path, outputFilePath, metadata, config.tempDir);
 
   // Respond immediately with jobId & queued status
-  res.status(201).json({
+  res.status(202).json({
     jobId,
     status: "queued",
   });
