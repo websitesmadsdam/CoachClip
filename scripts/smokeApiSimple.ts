@@ -27,6 +27,11 @@ async function runApiSmokeTest() {
   if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
   if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
 
+  let serverExit:
+    | { code: number | null; signal: NodeJS.Signals | null }
+    | undefined;
+  const stderrLines: string[] = [];
+
   try {
     if (!customBaseUrl) {
       // 1. Start the test server
@@ -38,8 +43,13 @@ async function runApiSmokeTest() {
           ...process.env,
           PORT,
           NODE_ENV: "production",
+          CORS_ORIGIN: `http://127.0.0.1:${PORT}`,
           TEMP_DIR: "./tmp/api_test_temp"
         }
+      });
+
+      serverProc.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {
+        serverExit = { code, signal };
       });
 
       // Capture server output for debugging if needed
@@ -47,7 +57,9 @@ async function runApiSmokeTest() {
         console.log(`[Server STDOUT] ${data.toString().trim()}`);
       });
       serverProc.stderr.on("data", (data: any) => {
-        console.error(`[Server STDERR] ${data.toString().trim()}`);
+        const text = data.toString();
+        stderrLines.push(text);
+        console.error(`[Server STDERR] ${text.trim()}`);
       });
     } else {
       console.log(`Step 1: Using existing test server at ${baseUrl}...`);
@@ -57,14 +69,32 @@ async function runApiSmokeTest() {
     console.log("Waiting for server to become healthy...");
     let healthy = false;
     for (let i = 0; i < 20; i++) {
+      if (!customBaseUrl && serverExit) {
+        const errorLog = stderrLines.join("").trim();
+        throw new Error(
+          `Test server exited before healthcheck: code=${serverExit.code}, signal=${serverExit.signal}\nStderr:\n${errorLog}`
+        );
+      }
       await delay(1000);
+      if (!customBaseUrl && serverExit) {
+        const errorLog = stderrLines.join("").trim();
+        throw new Error(
+          `Test server exited before healthcheck: code=${serverExit.code}, signal=${serverExit.signal}\nStderr:\n${errorLog}`
+        );
+      }
       try {
-        const healthRes = await fetch(`${baseUrl}/api/health`);
-        if (healthRes.ok) {
-          const healthJson = await healthRes.json();
-          console.log("Server healthcheck response:", healthJson);
-          healthy = true;
-          break;
+        const readyRes = await fetch(`${baseUrl}/api/ready`);
+        if (readyRes.ok) {
+          const readyJson = await readyRes.json();
+          console.log("Server readiness response:", readyJson);
+          if (
+            readyJson.status === "ready" &&
+            readyJson.ffmpeg === true &&
+            readyJson.ffprobe === true
+          ) {
+            healthy = true;
+            break;
+          }
         }
       } catch (e) {
         // Server not ready yet
