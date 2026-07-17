@@ -22,7 +22,13 @@
     "smoke:export:arrow": "tsx scripts/smokeExportArrow.ts",
     "smoke:export:freeze": "tsx scripts/smokeExportFreeze.ts",
     "smoke:export:annotations": "tsx scripts/smokeExportAnnotations.ts",
-    "verify": "npm run lint && npm run typecheck && npm run test && npm run build && npm run smoke:export:simple && npm run smoke:export:no-audio && npm run smoke:export && npm run smoke:export:text && npm run smoke:export:circle && npm run smoke:export:arrow && npm run smoke:export:freeze && npm run smoke:export:annotations && npm run smoke:api:simple && npx playwright test"
+    "verify:lint": "npm run lint",
+    "verify:typecheck": "npm run typecheck",
+    "verify:unit": "npm run test",
+    "verify:build": "npm run build",
+    "verify:smoke": "npm run smoke:export:simple && npm run smoke:export:no-audio && npm run smoke:export:text && npm run smoke:export:circle && npm run smoke:export:arrow && npm run smoke:export:freeze && npm run smoke:export:annotations && npm run smoke:export && npm run smoke:api:simple",
+    "verify:e2e": "npx playwright test",
+    "verify": "npm run verify:lint && npm run verify:typecheck && npm run verify:unit && npm run verify:build && npm run verify:smoke && npm run verify:e2e"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
