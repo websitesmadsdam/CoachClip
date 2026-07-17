@@ -26,8 +26,13 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // Let browser handle standard non-GET requests or external API calls directly
-  if (event.request.method !== "GET" || event.request.url.includes("/api/")) {
+  // Let browser handle standard non-GET requests, video assets, or external API calls directly
+  if (
+    event.request.method !== "GET" ||
+    event.request.url.includes("/api/") ||
+    event.request.url.endsWith(".mp4") ||
+    event.request.url.endsWith(".mov")
+  ) {
     return;
   }
 
