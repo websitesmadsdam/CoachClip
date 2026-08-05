@@ -6,7 +6,7 @@
 import { Page } from "@playwright/test";
 
 export const TEST_VIDEO = {
-  path: "public/demo_basketball_video.mp4",
+  path: "tmp/e2e/demo_test_video.mp4",
   durationSeconds: 8,
   trimStart: 1,
   trimEnd: 6,

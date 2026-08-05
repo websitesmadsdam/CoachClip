@@ -4,7 +4,7 @@ import path from "path";
 
 test.describe("CoachClip - Direct API Contract Verification", () => {
   test("creates a real export job through API", async ({ request }) => {
-    const videoPath = path.join(process.cwd(), "public/demo_basketball_video.mp4");
+    const videoPath = path.join(process.cwd(), "tmp/e2e/demo_test_video.mp4");
     expect(fs.existsSync(videoPath)).toBe(true);
 
     const metadata = {
@@ -15,7 +15,7 @@ test.describe("CoachClip - Direct API Contract Verification", () => {
         endTime: 6.0,
       },
       sourceVideo: {
-        fileName: "demo_basketball_video.mp4",
+        fileName: "demo_test_video.mp4",
         duration: 8.0,
       },
       annotations: [
@@ -36,7 +36,7 @@ test.describe("CoachClip - Direct API Contract Verification", () => {
     const response = await request.post("/api/exports", {
       multipart: {
         video: {
-          name: "demo_basketball_video.mp4",
+          name: "demo_test_video.mp4",
           mimeType: "video/mp4",
           buffer: fs.readFileSync(videoPath),
         },

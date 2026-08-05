@@ -42,8 +42,9 @@ test.describe("CoachClip - Full E2E Export Flow", () => {
     await page.locator("button:has-text('Nyt analyseklip')").first().click();
     await expect(page.locator("h3:has-text('Vælg kamp- eller træningsvideo')")).toBeVisible();
 
-    // 3. Select stock/demo basketball video
-    await page.locator("button:has-text('Prøv en demo basketball-video')").click();
+    // 3. Select generated test video
+    await page.setInputFiles("input[type='file']", TEST_VIDEO.path);
+    await page.locator("button:has-text('Fortsæt til klip-trimning')").click();
     
     // 4. Clip Selection Screen (trim bounds)
     await expect(page.locator("h2:has-text('Find situationen')")).toBeVisible({ timeout: 10000 });

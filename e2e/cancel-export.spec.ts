@@ -39,8 +39,9 @@ test.describe("CoachClip - Export Cancellation", () => {
     await page.goto("/");
     await page.locator("button:has-text('Nyt analyseklip')").first().click();
 
-    // 2. Click "Prøv en demo basketball-video"
-    await page.locator("button:has-text('Prøv en demo basketball-video')").click();
+    // 2. Select generated test video
+    await page.setInputFiles("input[type='file']", TEST_VIDEO.path);
+    await page.locator("button:has-text('Fortsæt til klip-trimning')").click();
 
     // 3. Clip Selection (Choose / Trim) -> Click next
     await expect(page.locator("h2:has-text('Find situationen')")).toBeVisible({ timeout: 10000 });

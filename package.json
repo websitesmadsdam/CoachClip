@@ -27,7 +27,7 @@
     "verify:unit": "npm run test",
     "verify:build": "npm run build",
     "verify:smoke": "npm run smoke:export:simple && npm run smoke:export:no-audio && npm run smoke:export:text && npm run smoke:export:circle && npm run smoke:export:arrow && npm run smoke:export:freeze && npm run smoke:export:annotations && npm run smoke:export && npm run smoke:api:simple",
-    "verify:e2e": "npx playwright test",
+    "verify:e2e": "tsx scripts/generateE2EVideo.ts && npx playwright test",
     "verify": "npm run verify:lint && npm run verify:typecheck && npm run verify:unit && npm run verify:build && npm run verify:smoke && npm run verify:e2e"
   },
   "dependencies": {

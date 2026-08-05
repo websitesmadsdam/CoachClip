@@ -39,8 +39,9 @@ test.describe("CoachClip - Export Expiry TTL", () => {
     await page.goto("/");
     await page.locator("button:has-text('Nyt analyseklip')").first().click();
 
-    // 2. Select demo video
-    await page.locator("button:has-text('Prøv en demo basketball-video')").click();
+    // 2. Select generated test video
+    await page.setInputFiles("input[type='file']", TEST_VIDEO.path);
+    await page.locator("button:has-text('Fortsæt til klip-trimning')").click();
 
     // 3. Wizard Trimming -> Next
     await expect(page.locator("h2:has-text('Find situationen')")).toBeVisible({ timeout: 10000 });
