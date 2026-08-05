@@ -5,12 +5,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Share2, Download, AlertTriangle, X, CheckCircle2
+  Share2, Download, AlertTriangle, X, CheckCircle2, PlusCircle
 } from "lucide-react";
 import { CoachClipProject, Collection, Annotation, BRAND_COLORS, ArrowAnnotation, CircleAnnotation, TextAnnotation } from "./types";
 import { dbService } from "./db";
 import { Sidebar } from "./components/Sidebar";
 import { BottomNav } from "./components/BottomNav";
+import { CoachClipLogo } from "./components/CoachClipLogo";
+import { UserGuide } from "./components/UserGuide";
 
 // Screen Views
 import { HomeScreen } from "./screens/HomeScreen";
@@ -34,6 +36,7 @@ const DEFAULT_VIDEO_URL = "/demo_basketball_video.mp4";
 export default function App() {
   // Current tab: "home" | "projects" | "collections" | "settings"
   const [currentTab, setCurrentTab] = useState<string>("home");
+  const [settingsSubTab, setSettingsSubTab] = useState<"guide" | "system">("guide");
 
   // Core Projects & Collections State
   const [projects, setProjects] = useState<CoachClipProject[]>([]);
@@ -430,8 +433,28 @@ export default function App() {
   const isEditingVideo = ["choose", "trim", "adjust", "editor", "review", "save", "exporting", "success"].includes(editorStep);
 
   return (
-    <div className="min-h-screen flex bg-slate-50 text-slate-900 select-none">
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 text-slate-900 select-none">
       
+      {/* Mobile Top Header Bar with Top-Left Icon */}
+      {!isEditingVideo && (
+        <header className="md:hidden bg-brand-dark text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 sticky top-0 z-40 shadow-sm">
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setCurrentTab("home")}>
+            <CoachClipLogo className="w-8 h-8" size={32} />
+            <div>
+              <span className="font-sans font-black text-base tracking-tight text-white leading-none block">CoachClip</span>
+              <span className="text-[9px] text-brand-accent font-semibold uppercase tracking-wider block">Videoanalyse</span>
+            </div>
+          </div>
+          <button
+            onClick={handleNewClipTrigger}
+            className="bg-brand-clear hover:bg-blue-600 text-white font-extrabold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Nyt klip</span>
+          </button>
+        </header>
+      )}
+
       {/* Sidebar Desktop Nav (Hidden when editing video to give editor stage maximum space) */}
       {!isEditingVideo && (
         <Sidebar 
@@ -800,45 +823,81 @@ export default function App() {
               />
             )}
 
-            {/* Tab 4: Settings page */}
+            {/* Tab 4: Settings & User Guide page */}
             {currentTab === "settings" && (
-              <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm animate-scale-up">
-                <h3 className="text-xl font-black text-brand-dark mb-1">Indstillinger</h3>
-                <p className="text-xs text-slate-400 mb-6 font-medium">Tilpas din CoachClip oplevelse og styr lokallageret.</p>
-
-                <div className="flex flex-col gap-6">
-                  <div className="border-b border-slate-100 pb-5">
-                    <h4 className="text-sm font-bold text-slate-800 mb-1">Sprog</h4>
-                    <p className="text-xs text-slate-500">CoachClip er fuldt lokaliseret på dansk til trænere i hallen.</p>
-                    <span className="mt-2.5 inline-block bg-brand-dark/10 text-brand-dark text-xs font-bold px-3 py-1 rounded-md">Dansk (DK)</span>
+              <div className="w-full max-w-4xl flex flex-col gap-6 animate-scale-up">
+                {/* Sub-nav header inside Settings */}
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="text-xl font-black text-brand-dark mb-1">Indstillinger & Vejledning</h3>
+                    <p className="text-xs text-slate-400 font-medium">Find komplette guides, lager-information og administrer dine app-data.</p>
                   </div>
-
-                  <div className="border-b border-slate-100 pb-5">
-                    <h4 className="text-sm font-bold text-slate-800 mb-1">PWA Offline status</h4>
-                    <p className="text-xs text-slate-500">Du kan installere CoachClip på din hjemmeskærm, så du altid har taktikklip klar offline.</p>
-                    <div className="mt-3.5 flex items-center gap-2 text-xs font-semibold text-brand-success">
-                      <span className="w-2.5 h-2.5 rounded-full bg-brand-success animate-ping" />
-                      <span>Klar til offline-brug (Service Worker Aktiv)</span>
-                    </div>
-                  </div>
-
-                  <div className="pb-2">
-                    <h4 className="text-sm font-bold text-slate-800 mb-1">Ryd lokallager (Kloge trænere rydder op)</h4>
-                    <p className="text-xs text-slate-500">Sletter alle gemte projekter, samlinger og cacher i din enheds database permanent.</p>
+                  <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold shrink-0">
                     <button
-                      onClick={async () => {
-                        if (confirm("Er du helt sikker på, du vil rydde ALT? Dette sletter alle dine analyserede klip, mockups og samlinger.")) {
-                          indexedDB.deleteDatabase("CoachClipDB");
-                          alert("Databasen er ryddet. Siden genstartes.");
-                          window.location.reload();
-                        }
-                      }}
-                      className="mt-4 px-4 py-2.5 bg-brand-error/15 hover:bg-brand-error text-brand-error hover:text-white text-xs font-black rounded-xl border border-brand-error/25 transition-all cursor-pointer"
+                      onClick={() => setSettingsSubTab("guide")}
+                      className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer ${
+                        settingsSubTab === "guide"
+                          ? "bg-white text-brand-clear shadow-sm font-black"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
                     >
-                      Nulstil alle CoachClip data
+                      Brugervejledning & Lager
+                    </button>
+                    <button
+                      onClick={() => setSettingsSubTab("system")}
+                      className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer ${
+                        settingsSubTab === "system"
+                          ? "bg-white text-brand-clear shadow-sm font-black"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      System & Data
                     </button>
                   </div>
                 </div>
+
+                {settingsSubTab === "guide" ? (
+                  <UserGuide />
+                ) : (
+                  <div className="w-full bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm">
+                    <h4 className="text-lg font-black text-brand-dark mb-1">System & Lokallager</h4>
+                    <p className="text-xs text-slate-400 mb-6 font-medium">Teknisk status og nulstilling af din enheds lokale database.</p>
+
+                    <div className="flex flex-col gap-6">
+                      <div className="border-b border-slate-100 pb-5">
+                        <h4 className="text-sm font-bold text-slate-800 mb-1">Sprog</h4>
+                        <p className="text-xs text-slate-500">CoachClip er fuldt lokaliseret på dansk til trænere i hallen.</p>
+                        <span className="mt-2.5 inline-block bg-brand-dark/10 text-brand-dark text-xs font-bold px-3 py-1 rounded-md">Dansk (DK)</span>
+                      </div>
+
+                      <div className="border-b border-slate-100 pb-5">
+                        <h4 className="text-sm font-bold text-slate-800 mb-1">PWA Offline status</h4>
+                        <p className="text-xs text-slate-500">Du kan installere CoachClip på din hjemmeskærm, så du altid har taktikklip klar offline.</p>
+                        <div className="mt-3.5 flex items-center gap-2 text-xs font-semibold text-brand-success">
+                          <span className="w-2.5 h-2.5 rounded-full bg-brand-success animate-ping" />
+                          <span>Klar til offline-brug (Service Worker Aktiv)</span>
+                        </div>
+                      </div>
+
+                      <div className="pb-2">
+                        <h4 className="text-sm font-bold text-slate-800 mb-1">Ryd lokallager (Kloge trænere rydder op)</h4>
+                        <p className="text-xs text-slate-500">Sletter alle gemte projekter, samlinger og cacher i din enheds database permanent.</p>
+                        <button
+                          onClick={async () => {
+                            if (confirm("Er du helt sikker på, du vil rydde ALT? Dette sletter alle dine analyserede klip, mockups og samlinger.")) {
+                              indexedDB.deleteDatabase("CoachClipDB");
+                              alert("Databasen er ryddet. Siden genstartes.");
+                              window.location.reload();
+                            }
+                          }}
+                          className="mt-4 px-4 py-2.5 bg-brand-error/15 hover:bg-brand-error text-brand-error hover:text-white text-xs font-black rounded-xl border border-brand-error/25 transition-all cursor-pointer"
+                        >
+                          Nulstil alle CoachClip data
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

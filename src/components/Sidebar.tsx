@@ -5,6 +5,7 @@
 
 import React from "react";
 import { Film, LayoutGrid, FolderHeart, Settings, PlusCircle } from "lucide-react";
+import { CoachClipLogo } from "./CoachClipLogo";
 
 interface SidebarProps {
   currentTab: string;
@@ -14,16 +15,14 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab, onNewClip }) => {
   return (
-    <aside className="w-64 bg-brand-dark text-white flex flex-col justify-between border-r border-slate-700 h-screen sticky top-0 shrink-0">
+    <aside className="w-64 bg-brand-dark text-white flex-col justify-between border-r border-slate-700 h-screen sticky top-0 shrink-0 hidden md:flex">
       <div className="p-6 flex flex-col gap-8">
-        {/* Brand Logo */}
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentTab("home")}>
-          <div className="w-10 h-10 rounded-xl bg-brand-clear flex items-center justify-center shadow-lg shadow-brand-clear/30">
-            <Film className="w-6 h-6 text-white" />
-          </div>
+        {/* Brand Logo in top left */}
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setCurrentTab("home")}>
+          <CoachClipLogo className="w-10 h-10" />
           <div>
-            <h1 className="font-sans font-bold text-xl tracking-tight leading-none text-white">CoachClip</h1>
-            <span className="text-[10px] text-brand-accent font-medium uppercase tracking-wider">Videoanalyse</span>
+            <h1 className="font-sans font-bold text-xl tracking-tight leading-none text-white group-hover:text-brand-clear transition-colors">CoachClip</h1>
+            <span className="text-[10px] text-brand-accent font-semibold uppercase tracking-wider">Videoanalyse</span>
           </div>
         </div>
 
