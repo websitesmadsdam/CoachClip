@@ -56,14 +56,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
       if (sourceFile && sourceFile.size > 0) {
         fileToUpload = sourceFile;
       } else {
-        // Fallback: If stock/demo video is used, fetch it as a blob
-        setStage("Henter demovideo...");
-        const demoUrl = "/demo_basketball_video.mp4";
-        const response = await fetch(demoUrl);
-        const blob = await response.blob();
-        fileToUpload = new File([blob], "Demo_Basketball_Video.mp4", { type: "video/mp4" });
-        setStatus("uploading");
-        setStage("Uploader video...");
+        throw new Error("Kildevideoen blev ikke fundet. Vælg eller genforbind din videofil for at eksportere.");
       }
 
       // Compile ExportRequestMetadata
@@ -74,7 +67,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
           endTime: project.clip.endTime,
         },
         sourceVideo: {
-          fileName: sourceFile?.name || "Demo_Basketball_Video.mp4",
+          fileName: sourceFile.name,
           duration: project.sourceVideo.duration,
           width: project.sourceVideo.width,
           height: project.sourceVideo.height,

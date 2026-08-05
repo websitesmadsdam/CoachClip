@@ -4,11 +4,10 @@
  */
 
 import React, { useRef, useState } from "react";
-import { Upload, Film, ChevronRight, ArrowLeft, AlertCircle, Sparkles } from "lucide-react";
+import { Upload, Film, ChevronRight, ArrowLeft, AlertCircle } from "lucide-react";
 
 interface VideoSelectScreenProps {
   onFileSelected: (file: File) => void;
-  onUseStockVideo: () => void;
   onBack: () => void;
   selectedFile: File | null;
   onAccept: () => void;
@@ -16,7 +15,6 @@ interface VideoSelectScreenProps {
 
 export const VideoSelectScreen: React.FC<VideoSelectScreenProps> = ({
   onFileSelected,
-  onUseStockVideo,
   onBack,
   selectedFile,
   onAccept,
@@ -112,33 +110,6 @@ export const VideoSelectScreen: React.FC<VideoSelectScreenProps> = ({
             </>
           )}
         </div>
-
-        {/* Option to try default basketball clip */}
-        {!selectedFile && (
-          <div className="flex flex-col gap-2.5">
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Eller prøv med det samme</span>
-              <div className="flex-grow border-t border-slate-200"></div>
-            </div>
-
-            <button
-              onClick={onUseStockVideo}
-              className="w-full p-4 bg-amber-50 hover:bg-amber-100/80 border border-amber-200/50 rounded-2xl flex items-center justify-between text-left transition-all hover:shadow-sm cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-800">Prøv en demo basketball-video</p>
-                  <p className="text-[10px] text-amber-600 font-medium">Uden at uploade din egen fil • Klik for at teste med det samme</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-amber-500 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-          </div>
-        )}
 
         {/* Error/Notice bar */}
         <div className="flex gap-2.5 p-3.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] text-slate-500 leading-normal">

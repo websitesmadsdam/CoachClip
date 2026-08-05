@@ -12,7 +12,7 @@ createRoot(document.getElementById('root')!).render(
 // Register service worker for offline support and installation capability
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('/sw.js?v=3')
       .then((registration) => {
         console.log('CoachClip Service Worker registered successfully:', registration.scope);
       })

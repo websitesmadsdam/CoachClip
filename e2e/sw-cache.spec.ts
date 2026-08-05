@@ -20,9 +20,13 @@ test.describe("CoachClip Service Worker & PWA Cache Strategy", () => {
     });
     expect(hasOldCache).toBe(true);
 
-    // 3. Register updated service worker script with version query parameter to trigger SW install & activate events
+    // 3. Register actual public/sw.js with new parameter to trigger SW install & activate events
     await page.evaluate(async () => {
       if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
         const reg = await navigator.serviceWorker.register(`/sw.js?v=${Date.now()}`);
         const activeWorker = reg.installing || reg.waiting || reg.active;
         if (activeWorker && activeWorker.state !== "activated") {
@@ -43,24 +47,24 @@ test.describe("CoachClip Service Worker & PWA Cache Strategy", () => {
       }
     });
 
-    // 4. Reload page without Ctrl+Shift+R
+    // 4. Verify all old coachclip- caches are deleted
+    await expect.poll(async () => {
+      return await page.evaluate(async () => {
+        const keys = await window.caches.keys();
+        const coachclipCaches = keys.filter((k) => k.startsWith("coachclip-"));
+        return coachclipCaches.length;
+      });
+    }, { timeout: 10000, intervals: [200, 500, 1000] }).toBe(0);
+
+    // 5. Reload page normally without Ctrl+Shift+R
     await page.reload();
 
-    // 5. Verify React app homepage renders successfully and is NOT blank
+    // 6. Verify React app homepage renders successfully and is NOT blank
     const mainHeading = page.locator("h2");
     await expect(mainHeading).toContainText("Find situationen.");
     await expect(mainHeading).toContainText("Forklar den. Del den.");
 
     const newClipButton = page.locator("button:has-text('Nyt analyseklip')").first();
     await expect(newClipButton).toBeVisible();
-
-    // 6. Verify old cache v1 was automatically deleted by activate listener and v2 cache exists
-    await expect.poll(async () => {
-      return await page.evaluate(async () => {
-        const v1Exists = await window.caches.has("coachclip-v1");
-        const v2Exists = await window.caches.has("coachclip-v2");
-        return { v1Exists, v2Exists };
-      });
-    }, { timeout: 10000, intervals: [200, 500, 1000] }).toEqual({ v1Exists: false, v2Exists: true });
   });
 });

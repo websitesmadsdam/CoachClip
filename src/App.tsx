@@ -28,10 +28,7 @@ import { CollectionsScreen } from "./components/CollectionsScreen";
 import { useObjectUrl } from "./hooks/useObjectUrl";
 
 // Flag to toggle seeding of demo data
-const ENABLE_DEMO_DATA = true;
-
-// Sample Stock Video for high contrast prototyping
-const DEFAULT_VIDEO_URL = "/demo_basketball_video.mp4";
+const ENABLE_DEMO_DATA = false;
 
 export default function App() {
   // Current tab: "home" | "projects" | "collections" | "settings"
@@ -248,7 +245,7 @@ export default function App() {
       return;
     }
 
-    const url = downloadUrl || proj.exportedVideoUrl || DEFAULT_VIDEO_URL;
+    const url = downloadUrl || proj.exportedVideoUrl || "";
     setVideoSourceSafely(url);
     setVideoDuration(proj.sourceVideo.duration);
     setTrimRange(proj.clip);
@@ -405,6 +402,20 @@ export default function App() {
   const deleteProject = async (id: string) => {
     if (confirm("Er du sikker på, du vil slette dette analyseklip permanent?")) {
       await dbService.deleteProject(id);
+      
+      // Clean up dead project reference from any collections containing it
+      const allCollections = await dbService.getAllCollections();
+      for (const col of allCollections) {
+        if (col.projectIds.includes(id)) {
+          const updatedCol = {
+            ...col,
+            projectIds: col.projectIds.filter(pId => pId !== id),
+            updatedAt: new Date().toISOString()
+          };
+          await dbService.saveCollection(updatedCol);
+        }
+      }
+
       await loadProjectsData();
     }
   };
@@ -475,34 +486,6 @@ export default function App() {
               <VideoSelectScreen
                 selectedFile={selectedFile}
                 onFileSelected={handleVideoFile}
-                onUseStockVideo={() => {
-                  const demoFile = new File([], "Demo_Basketball_Video.mp4");
-                  setSelectedFile(demoFile);
-                  setVideoSourceSafely(DEFAULT_VIDEO_URL);
-                  setVideoDuration(8);
-                  const newProj: CoachClipProject = {
-                    id: "proj_" + Date.now(),
-                    title: "Uden titel",
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    sourceVideo: {
-                      fileName: "Demo_Basketball_Video.mp4",
-                      duration: 8,
-                      size: 0,
-                      width: 640,
-                      height: 360
-                    },
-                    clip: {
-                      startTime: 1,
-                      endTime: 6
-                    },
-                    annotations: [],
-                    exportStatus: "not_exported"
-                  };
-                  setActiveProject(newProj);
-                  setTrimRange({ startTime: 1, endTime: 6 });
-                  setEditorStep("trim");
-                }}
                 onBack={() => setEditorStep("idle")}
                 onAccept={acceptVideoChoice}
               />
@@ -990,7 +973,7 @@ export default function App() {
             setPreviewProject(null);
             selectProjectForEditing(previewProject);
           }}
-          videoUrl={previewProject.export?.downloadUrl || previewProject.exportedVideoUrl || DEFAULT_VIDEO_URL}
+          videoUrl={previewProject.export?.downloadUrl || previewProject.exportedVideoUrl || ""}
         />
       )}
 
