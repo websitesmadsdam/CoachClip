@@ -2,7 +2,7 @@ name: Verify CoachClip MVP
 
 on:
   push:
-    branches: [ main, google/fix-production-gaps ]
+    branches: [ main, google/fix-production-gaps, ci/verify-container-svg-support ]
   pull_request:
     branches: [ main ]
 
@@ -87,6 +87,38 @@ jobs:
           echo "Healthcheck failed!"
           docker logs coachclip-ci
           exit 1
+
+      - name: Assert container FFmpeg can decode SVG
+        run: |
+          echo "--- container ffmpeg version ---"
+          docker exec coachclip-ci ffmpeg -hide_banner -version | head -1
+          echo "--- librsvg in build configuration? ---"
+          docker exec coachclip-ci sh -c 'ffmpeg -hide_banner -version | grep -o -- "--enable-librsvg"' \
+            || { echo "FAIL: container ffmpeg is built WITHOUT librsvg - annotation export is broken in production"; exit 1; }
+          echo "--- svg decoders available? ---"
+          docker exec coachclip-ci sh -c 'ffmpeg -hide_banner -decoders | grep -i svg' \
+            || { echo "FAIL: container ffmpeg has NO svg decoder - annotation export is broken in production"; exit 1; }
+
+      - name: Render an SVG overlay inside the container
+        run: |
+          docker exec -i coachclip-ci sh -s <<'EOF'
+          set -e
+          cd /app/tmp
+          cat > svgcheck.svg <<'SVG'
+          <svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">
+            <rect x="40" y="40" width="560" height="280" fill="none" stroke="#ff0000" stroke-width="8"/>
+            <text x="60" y="200" font-size="48" fill="#ff0000">CoachClip</text>
+          </svg>
+          SVG
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=duration=2:size=640x360:rate=30 \
+            -c:v libx264 -pix_fmt yuv420p -y svgcheck_in.mp4
+          ffmpeg -hide_banner -loglevel error -i svgcheck_in.mp4 -i svgcheck.svg \
+            -filter_complex "[0:v]scale=640:360[v0]; [v0][1:v]overlay=0:0:enable='between(t,0,2)'[v_out]" \
+            -map "[v_out]" -c:v libx264 -pix_fmt yuv420p -r 30 -y svgcheck_out.mp4
+          test -s svgcheck_out.mp4
+          echo "OK: container ffmpeg decoded an SVG and rendered the overlay"
+          rm -f svgcheck.svg svgcheck_in.mp4 svgcheck_out.mp4
+          EOF
 
       - name: Install FFmpeg tools for host smoke validation
         run: |
