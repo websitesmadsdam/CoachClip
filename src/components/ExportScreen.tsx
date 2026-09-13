@@ -62,6 +62,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
       // Compile ExportRequestMetadata
       const metadata = {
         projectId: project.id,
+        projectTitle: project.title,
         clip: {
           startTime: project.clip.startTime,
           endTime: project.clip.endTime,
@@ -216,8 +217,8 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
       }
     }
 
-    setErrorMsg("Eksporten blev afbrudt.");
-    setStatus("failed");
+    setErrorMsg("");
+    setStatus("cancelled");
   };
 
   // Privacy Confirmation Dialog (Section 9!)
@@ -251,20 +252,31 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
     );
   }
 
-  // Failure display
+  // Failure and user-cancelled display
   if (status === "failed" || status === "cancelled") {
+    const isCancelled = status === "cancelled";
     return (
       <div className="w-full max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 text-center animate-scale-up">
-        <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
-          <AlertTriangle className="w-8 h-8" />
-        </div>
-        <h3 className="text-xl font-extrabold text-slate-900 mb-2">Eksporten fejlede</h3>
+        {isCancelled ? (
+          <div className="w-16 h-16 bg-slate-50 text-slate-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-200">
+            <X className="w-8 h-8" />
+          </div>
+        ) : (
+          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+        )}
+        <h3 className="text-xl font-extrabold text-slate-900 mb-2">
+          {isCancelled ? "Eksporten blev afbrudt" : "Eksporten fejlede"}
+        </h3>
         <p className="text-xs text-slate-500 mb-6 leading-relaxed font-medium">
-          {errorMsg || "Eksporten blev afbrudt."}
+          {isCancelled
+            ? "Du afbrød eksporten. Projektet og dine markeringer er stadig gemt."
+            : errorMsg || "Klippet kunne ikke oprettes. Projektet og dine markeringer er stadig gemt."}
         </p>
         <div className="flex gap-2.5">
           <button
-            onClick={() => onExportFailed(errorMsg)}
+            onClick={() => onExportFailed(isCancelled ? "Afbrudt af bruger." : errorMsg)}
             className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
           >
             Gå tilbage
