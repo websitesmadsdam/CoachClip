@@ -1,86 +1,82 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import type { Request, Response } from "express";
+import { checkRateLimit, createRateLimiter, RateLimitStore } from "../src/middleware/rateLimiter";
+import { config } from "../src/config";
+import { EXPORT_POLL_INTERVAL_MS } from "../../shared/exportJob";
 
-// Replicate rate limiting logic to test it in isolation
 describe("Rate Limiting & Retry-After", () => {
-  let rateLimitMap: Map<string, { count: number; resetTime: number }>;
-
-  beforeEach(() => {
-    rateLimitMap = new Map();
-  });
-
-  const runLimiter = (
-    ip: string,
-    keyPrefix: string,
-    maxRequests: number,
-    windowMs: number,
-    now: number
-  ) => {
-    const ipKey = `${keyPrefix}_${ip}`;
-    const rateData = rateLimitMap.get(ipKey);
-
-    if (!rateData || now > rateData.resetTime) {
-      rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
-      return { allowed: true };
-    } else {
-      rateData.count++;
-      if (rateData.count > maxRequests) {
-        const secondsLeft = Math.ceil((rateData.resetTime - now) / 1000);
-        return { allowed: false, retryAfter: secondsLeft };
-      } else {
-        return { allowed: true };
-      }
-    }
-  };
+  const WINDOW_MS = 60000;
 
   it("should allow requests under the limit", () => {
+    const store: RateLimitStore = new Map();
     const now = Date.now();
     for (let i = 0; i < 5; i++) {
-      const res = runLimiter("127.0.0.1", "general", 100, 60000, now);
-      expect(res.allowed).toBe(true);
+      expect(checkRateLimit(store, "general_127.0.0.1", 100, WINDOW_MS, now).allowed).toBe(true);
     }
   });
 
-  it("should reject requests exceeding general limit and set retryAfter", () => {
+  it("should reject requests exceeding the limit and report seconds until reset", () => {
+    const store: RateLimitStore = new Map();
     const now = Date.now();
-    // General limit of 100
-    for (let i = 0; i < 100; i++) {
-      const res = runLimiter("127.0.0.1", "general", 100, 60000, now);
-      expect(res.allowed).toBe(true);
-    }
-
-    const blockedRes = runLimiter("127.0.0.1", "general", 100, 60000, now);
-    expect(blockedRes.allowed).toBe(false);
-    expect(blockedRes.retryAfter).toBe(60); // 60 seconds left
-  });
-
-  it("should reject requests exceeding exports create limit and set retryAfter", () => {
-    const now = Date.now();
-    // Export limit is 5
     for (let i = 0; i < 5; i++) {
-      const res = runLimiter("127.0.0.1", "exports_create", 5, 60000, now);
-      expect(res.allowed).toBe(true);
+      expect(checkRateLimit(store, "exports_create_127.0.0.1", 5, WINDOW_MS, now).allowed).toBe(true);
     }
 
-    const blockedRes = runLimiter("127.0.0.1", "exports_create", 5, 60000, now);
-    expect(blockedRes.allowed).toBe(false);
-    expect(blockedRes.retryAfter).toBe(60); // 60 seconds left
+    const blocked = checkRateLimit(store, "exports_create_127.0.0.1", 5, WINDOW_MS, now);
+    expect(blocked).toEqual({ allowed: false, retryAfterSeconds: 60 });
   });
 
-  it("should reset rate limit window after window duration expires", () => {
+  it("should reset the window after its duration expires", () => {
+    const store: RateLimitStore = new Map();
     const start = Date.now();
-    
-    // Fill up to limit
-    for (let i = 0; i < 5; i++) {
-      runLimiter("127.0.0.1", "exports_create", 5, 60000, start);
+    for (let i = 0; i < 6; i++) {
+      checkRateLimit(store, "k", 5, WINDOW_MS, start);
     }
+    expect(checkRateLimit(store, "k", 5, WINDOW_MS, start).allowed).toBe(false);
+    expect(checkRateLimit(store, "k", 5, WINDOW_MS, start + 61000).allowed).toBe(true);
+  });
 
-    // Exceeded at same time window
-    const blockedRes = runLimiter("127.0.0.1", "exports_create", 5, 60000, start);
-    expect(blockedRes.allowed).toBe(false);
+  it("should count keys independently", () => {
+    const store: RateLimitStore = new Map();
+    const now = Date.now();
+    checkRateLimit(store, "a", 1, WINDOW_MS, now);
+    expect(checkRateLimit(store, "a", 1, WINDOW_MS, now).allowed).toBe(false);
+    expect(checkRateLimit(store, "b", 1, WINDOW_MS, now).allowed).toBe(true);
+  });
 
-    // After 61 seconds (beyond window)
-    const later = start + 61000;
-    const allowedRes = runLimiter("127.0.0.1", "exports_create", 5, 60000, later);
-    expect(allowedRes.allowed).toBe(true);
+  it("middleware should call next under the limit and answer 429 with Retry-After over it", () => {
+    const limiter = createRateLimiter({
+      store: new Map(),
+      keyPrefix: "general",
+      maxRequests: 1,
+      windowMs: WINDOW_MS,
+      message: (s) => `Prøv igen om ${s} sekunder.`,
+      now: () => 1_000_000,
+    });
+    const req = { ip: "10.0.0.1", headers: {} } as unknown as Request;
+    const setHeader = vi.fn();
+    const json = vi.fn();
+    const status = vi.fn();
+    const res = { setHeader, status, json } as unknown as Response;
+    status.mockReturnValue(res);
+    const next = vi.fn();
+
+    limiter(req, res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+
+    limiter(req, res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(setHeader).toHaveBeenCalledWith("Retry-After", "60");
+    expect(status).toHaveBeenCalledWith(429);
+    expect(json).toHaveBeenCalledWith({ error: "TOO_MANY_REQUESTS", message: "Prøv igen om 60 sekunder." });
+  });
+
+  it("default limits should allow polling two exports at once from the same IP", () => {
+    const pollsPerMinutePerExport = Math.ceil(60000 / EXPORT_POLL_INTERVAL_MS);
+    const generalPerMinute = config.rateLimitGeneral / (config.rateLimitGeneralWindowSeconds / 60);
+    const statusPerMinute = config.rateLimitStatus / (config.rateLimitStatusWindowSeconds / 60);
+
+    expect(generalPerMinute).toBeGreaterThanOrEqual(2 * pollsPerMinutePerExport);
+    expect(statusPerMinute).toBeGreaterThanOrEqual(2 * pollsPerMinutePerExport);
   });
 });

@@ -60,8 +60,12 @@ De skrives til en træner, ikke til en udvikler: "Klippet kunne ikke oprettes. P
 dine markeringer er dog stadig gemt." Kode, kommentarer og commits er på engelsk.
 
 **`shared/` er eneste kilde til typer.** Definér typer og geometri i `shared/` og importér
-derfra i både `src/` og `server/`. Backend må **ikke** importere fra `src/` — det gør den
-flere steder i dag, og det skal væk, ikke udbredes.
+derfra i både `src/` og `server/`. Backend må **ikke** importere fra `src/`.
+`shared/annotations.ts` er annotationstyperne, `shared/exportJob.ts` er jobstatus og
+svaret fra `GET /api/exports/:jobId`, `shared/exportSchema.ts` er upload-metadata.
+`src/types.ts` re-eksporterer annotationstyperne og ejer kun frontend-modeller (projekt,
+samling). Bemærk: projektets gemte status hedder `"exported"`, jobbets hedder
+`"completed"` — de er bevidst forskellige, og `ExportScreen` oversætter i én typet funktion.
 
 **Koordinater er altid relative (0–1).** Aldrig pixels i datamodellen. Det er hele grunden
 til at preview og eksport kan gengive samme markering i forskellige opløsninger.
@@ -109,24 +113,19 @@ Rettet i prioriteret rækkefølge:
    Bemærk også: tekstannotationer bruger Arial/Helvetica, så rendering afhænger af hvilke
    fonte der er på maskinen — det gælder allerede i dag.
 
-1. **Eksporterede filer hedder altid `CoachClip.mp4`.** Backend bruger
-   `metadata.projectTitle`, men `ExportScreen.tsx` sender det ikke. Sanitizeren i
-   `shared/exportSchema.ts` er dermed død kode.
-2. **Typerne er dubleret tre steder og divergerer.** `src/types.ts` siger `"exported"`,
-   `shared/annotations.ts` og `server/src/types/exportTypes.ts` siger `"completed"`.
-   `ExportScreen` oversætter manuelt. Fanges ikke af typecheck, fordi polling-svaret er `any`.
-3. **`ffprobe`-varighed læses kun fra stream.** For en del MOV-filer (bl.a. fra iPhone) er
-   `stream.duration` tom → uploadet afvises med `INVALID_VIDEO_METADATA` selvom filen er
-   fin. Brug `format=duration` som fallback.
-4. **Polling kan ramme rate limit.** Frontend poller hvert 1200 ms = ~50 req/min pr.
-   eksport, mens den generelle limiter i `server.ts` er hardcodet til 100/min pr. IP.
-   To samtidige eksporter giver 429 midt i kørslen. Flyt grænserne ud i `config`.
 5. **PWA-ikonerne kan ikke indlæses.** `public/manifest.json` peger på Unsplash-URL'er,
    men CSP'en sætter `img-src 'self' data:`. Læg rigtige PNG'er i `public/`.
 6. **Service workeren er network-only** og gør intet — men kommentaren i `main.tsx` siger
    "offline support". Appen virker ikke offline.
-7. **Annullering vises som fejl.** `handleCancel` sætter status `failed`, så brugeren ser
-   "Eksporten fejlede" efter selv at have trykket Annullér.
+
+Løst (numrene bruges i PR'er og commits, derfor er de ikke omnummereret):
+1. Filnavn var altid `CoachClip.mp4` — `ExportScreen` sender nu `projectTitle`.
+2. Typerne var dubleret tre steder — samlet i `shared/`, polling-svaret er typet.
+3. `ffprobe`-varighed kun fra stream — `format=duration` er fallback (iPhone-MOV).
+4. Polling kunne ramme rate limit — alle grænser ligger i `config` (`RATE_LIMIT_GENERAL`
+   m.fl.), limiterne deler `server/src/middleware/rateLimiter.ts`, og en test sikrer at
+   standardgrænserne tillader polling af to eksporter pr. IP (`EXPORT_POLL_INTERVAL_MS`).
+7. Annullering blev vist som fejl — vises nu neutralt som "Eksporten blev afbrudt".
 
 ## Død kode — ret ikke i disse filer
 
@@ -136,7 +135,6 @@ til at rette i dem:
 - `src/components/EditorScreen.tsx` (46 KB) — den rigtige er `features/annotations/AnnotationEditor.tsx`
 - `src/components/TrimScreen.tsx` (20 KB) — de rigtige er `screens/ClipSelectScreen.tsx` + `ClipFineTuneScreen.tsx`
 - `src/hooks/useAutosave.ts`, `src/hooks/usePointerDrag.ts`
-- `shared/annotations.ts` (dublet af `src/types.ts`)
 - `shared/videoGeometry.ts` — `computeOutputDimensions` er i stedet kopieret inline tre
   steder i `ffmpegExportService.ts`
 
@@ -156,14 +154,14 @@ Projektet blev bygget i AI Studio. Følgende er scaffolding uden funktion og kan
 
 Udvikles på Windows (E:\Projekter\CoachClip).
 
-- `playwright.config.ts` starter serveren med `PORT=3001 npm run dev`. Playwright spawner
-  med `shell: true`, hvilket på Windows er `cmd.exe`, hvor `PORT=3001 ...` fejler med
-  "'PORT' is not recognized". **Rettelsen er at slette prefikset** — `PORT: "3001"` står
-  allerede i `env`-blokken samme sted, så `cross-env` er ikke nødvendig.
+- Playwright spawner webServer via `cmd.exe` på Windows. Sæt derfor aldrig env-variabler
+  som prefiks i `command` (`PORT=3001 npm run dev` fejler) — de hører til i `env`-blokken.
   `> e2e-server.log 2>&1` er gyldig cmd-syntaks og skal blive.
-- `verify:e2e` kræver desuden `npx playwright install chromium` (`npm ci` henter dem ikke)
-  og at port 3001 er fri — `reuseExistingServer: false` afviser at starte hvis en anden
+- `verify:e2e` kræver `npx playwright install chromium` (`npm ci` henter dem ikke) og at
+  port 3001 er fri — `reuseExistingServer: false` afviser at starte hvis en anden
   dev-server har taget porten.
+- WinGet installerer ffmpeg i `%LOCALAPPDATA%\Microsoft\WinGet\Links`, som er i Windows'
+  PATH men ikke i Git Bash'. Kør E2E/smoke fra PowerShell, eller tilføj mappen til PATH.
 - `npm run clean` bruger `rm -rf`.
 - `getFreeDiskSpace()` kalder `df -h /` og returnerer pænt "unknown" på Windows — kosmetisk.
 - **`verify:smoke` kan ikke blive grøn på Windows.** Pipelinen kræver en FFmpeg bygget
@@ -175,7 +173,10 @@ Udvikles på Windows (E:\Projekter\CoachClip).
   |---|---|
   | `verify:lint`, `verify:typecheck`, `verify:unit`, `verify:build` | smoke 3–8 (text, circle, arrow, freeze, combined, annotations) |
   | smoke 1, 2 og `smoke:api:simple` (ingen annotationer) | |
-  | `verify:e2e` | |
+  | `verify:e2e` uden `export-flow` (`npx playwright test --grep-invert "Full E2E Export Flow"`) | `export-flow` (renderer markeringer) |
+
+  Kører du hele `verify:e2e` lokalt, fejler `export-flow`, og det kan trække
+  `cancel-export` og `sw-cache` med i den samme kørsel. Kørt alene er de grønne.
 
   Tjek din binær med `ffmpeg -decoders | findstr svg`. Fejler en annotations-eksport med
   `Decoding requested, but no decoder found for: svg`, er det dit FFmpeg-build og ikke koden.

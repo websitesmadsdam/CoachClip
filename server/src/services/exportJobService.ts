@@ -5,7 +5,7 @@
  * Documented exceptions: Types are exported for external modules but flagged locally.
  */
 
-import { ExportJob, ExportStatus, ExportStage } from "../types/exportTypes";
+import { ExportJob } from "../types/exportTypes";
 import { config } from "../config";
 
 class ExportJobService {
