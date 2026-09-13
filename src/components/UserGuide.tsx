@@ -70,15 +70,15 @@ export const UserGuide: React.FC = () => {
     },
     {
       q: "Gemmes mine tunge rå-videoer i skyen?",
-      a: "Nej, for at beskytte din enheds hukommelse og sikre lynhurtig afspilning arbejder CoachClip direkte på din lokalt valgte videofil. Under eksport behandles klippet sikkert på vores server og slettes automatisk bagefter."
+      a: "Nej. CoachClip arbejder direkte på den videofil, du vælger på din enhed, og selve eksporten sker også i din browser. Videoen sendes ingen steder."
     },
     {
       q: "Hvorfor beder CoachClip mig om at 'Vælg videofil igen'?",
       a: "Hvis browserens midlertidige hukommelsessti udløber (f.eks. efter genstart af din telefon eller browser), beder CoachClip dig om at pege på den samme videofil igen. Når du gør det, genindlæses alle dine markeringer og tidskoder automatisk uden tab af data!"
     },
     {
-      q: "Hvordan kan jeg bruge CoachClip offline?",
-      a: "CoachClip er en moderne PWA (Progressive Web App). Du kan installere den på din hjemmeskærm, og du kan gennemgå, redigere og afspille dine lokalt gemte samlinger og projekter uden internetforbindelse."
+      q: "Kan jeg bruge CoachClip uden internet?",
+      a: "Appen skal have internet for at åbne. Når den er åben, sker redigering og eksport på din enhed."
     }
   ];
 
@@ -179,23 +179,23 @@ export const UserGuide: React.FC = () => {
                 <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">Overførsler</span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Når du trykker på <strong>Download MP4</strong> efter en fuldført eksport, gemmes den samlede videofil direkte i din enheds standard <strong>Overførsler-mappe (Downloads)</strong>. Filen er nu en almindelig videofil, som du frit kan sende på Holdsport, KampKlar, WhatsApp eller e-mail.
+                Når klippet er færdigt, kan du trykke <strong>Del klip</strong> for at sende det via WhatsApp, AirDrop eller gemme det i Fotos, eller <strong>Download MP4</strong> for at gemme filen i din enheds <strong>Overførsler-mappe (Downloads)</strong>.
               </p>
             </div>
           </div>
 
-          {/* Card 3: Privacy & Server rendering */}
+          {/* Card 3: Privacy */}
           <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 sm:p-5 flex gap-4 items-start">
             <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h4 className="font-extrabold text-slate-850 text-sm">3. Fortrolighed & Midlertidig rendering</h4>
+                <h4 className="font-extrabold text-slate-850 text-sm">3. Fortrolighed: alt sker på din enhed</h4>
                 <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">Sikkerhed</span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Under selve eksporten opretter CoachClip en midlertidig renderingsjob på vores lynhurtige FFmpeg-motor. Så snart eksporten er færdig eller downloadet, <strong>slettes alle midlertidige filaftryk automatisk</strong>. Dine videoer og holddata tilhører 100% dig.
+                Klippet laves direkte i din browser. Videoen og det færdige klip forlader aldrig din enhed, og den midlertidige eksportfil slettes, når du forlader skærmen med det færdige klip. Dine videoer og holddata tilhører 100% dig.
               </p>
             </div>
           </div>

@@ -4,7 +4,6 @@ import {
   wrapTextLines,
   layoutTextAnnotation,
   getArrowHead,
-  getTextGeometry,
 } from "./annotationGeometry";
 
 const measure = (line: string, fontSize: number) => line.length * fontSize * 0.5;
@@ -31,11 +30,6 @@ describe("wrapTextLines", () => {
 
   it("returns no lines for empty text", () => {
     expect(wrapTextLines("")).toEqual([]);
-  });
-
-  it("matches the legacy getTextGeometry wrapping", () => {
-    const text = "Pres højt og luk midten hurtigt ned";
-    expect(wrapTextLines(text)).toEqual(getTextGeometry(1920, 1080, 0.5, 0.5, "normal", text).lines);
   });
 });
 

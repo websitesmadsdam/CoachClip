@@ -834,12 +834,8 @@ export default function App() {
                       </div>
 
                       <div className="border-b border-slate-100 pb-5">
-                        <h4 className="text-sm font-bold text-slate-800 mb-1">PWA Offline status</h4>
-                        <p className="text-xs text-slate-500">Du kan installere CoachClip på din hjemmeskærm, så du altid har taktikklip klar offline.</p>
-                        <div className="mt-3.5 flex items-center gap-2 text-xs font-semibold text-brand-success">
-                          <span className="w-2.5 h-2.5 rounded-full bg-brand-success animate-ping" />
-                          <span>Klar til offline-brug (Service Worker Aktiv)</span>
-                        </div>
+                        <h4 className="text-sm font-bold text-slate-800 mb-1">Eksport på din enhed</h4>
+                        <p className="text-xs text-slate-500">Klip laves direkte i din browser – videoen sendes ingen steder. På iPhone og iPad kræver det iOS 26 eller nyere.</p>
                       </div>
 
                       <div className="pb-2">
