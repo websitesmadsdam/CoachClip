@@ -23,7 +23,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "PORT=3001 npm run dev > e2e-server.log 2>&1",
+    command: "npm run dev > e2e-server.log 2>&1",
     url: `${E2E_ORIGIN}/api/ready`,
     reuseExistingServer: false,
     stdout: "ignore",
