@@ -115,6 +115,11 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
   try {
     onProgress({ stage: "preparing", fraction: 0 });
 
+    // Checked before opening the video track: without WebCodecs, Mediabunny's own canDecode()
+    // check would fail too, but with the wrong reason (UNREADABLE_VIDEO instead of UNSUPPORTED_BROWSER).
+    const probe = browserCapabilityProbe();
+    if (!probe.hasWebCodecs || !probe.hasOffscreenCanvas) throw new ExportError("UNSUPPORTED_BROWSER");
+
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
     input = new Input({ formats: ALL_FORMATS, source: new BlobSource(file) });
     wakeLock = (await navigator.wakeLock?.request("screen").catch(() => null)) ?? null;
@@ -130,7 +135,7 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
     if (!validation.valid) throw new ExportError("INVALID_PROJECT", { message: validation.message });
 
     const { width, height } = computeOutputDimensions(await videoTrack.getDisplayWidth(), await videoTrack.getDisplayHeight());
-    const capabilities = await detectExportCapabilities(browserCapabilityProbe(), { width, height });
+    const capabilities = await detectExportCapabilities(probe, { width, height });
     if (!capabilities.supported) throw new ExportError("UNSUPPORTED_BROWSER");
 
     const plan = planSegments(project.clip, project.annotations, EXPORT_FPS);

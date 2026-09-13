@@ -161,6 +161,18 @@ test("rejects an invalid project with the Danish validation message", async ({ p
   });
 });
 
+test("reports UNSUPPORTED_BROWSER when WebCodecs is missing", async ({ page }) => {
+  await page.evaluate(() => {
+    Object.defineProperty(window, "VideoDecoder", { value: undefined, configurable: true, writable: true });
+  });
+  const result = await run(page, { fixtureUrl: LANDSCAPE, clip, annotations: [] });
+  expect(result.ok).toBe(false);
+  expect(result.errorCode).toBe("UNSUPPORTED_BROWSER");
+  expect(result.errorMessage).toBe(
+    "Din browser kan ikke lave klip. Opdatér til iOS 26 eller nyere, eller brug Chrome, Edge eller Safari på en computer."
+  );
+});
+
 test("download delivers an mp4 with the sanitized file name", async ({ page }) => {
   const result = await run(page, { fixtureUrl: LANDSCAPE, clip, annotations: [], title: "Træning Åen", keepAs: "download" });
   expect(result.ok, result.errorMessage).toBe(true);
