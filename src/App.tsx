@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Share2, Download, AlertTriangle, X, CheckCircle2, PlusCircle
 } from "lucide-react";
-import { CoachClipProject, Collection, Annotation, BRAND_COLORS, ArrowAnnotation, CircleAnnotation, TextAnnotation } from "./types";
+import { CoachClipProject, Collection, Annotation } from "./types";
 import { dbService } from "./db";
 import { Sidebar } from "./components/Sidebar";
 import { BottomNav } from "./components/BottomNav";
@@ -20,6 +20,7 @@ import { VideoSelectScreen } from "./screens/VideoSelectScreen";
 import { ClipSelectScreen } from "./screens/ClipSelectScreen";
 import { ClipFineTuneScreen } from "./screens/ClipFineTuneScreen";
 import { AnnotationEditor } from "./features/annotations/AnnotationEditor";
+import { AnnotationCanvas } from "./features/annotations/AnnotationCanvas";
 import { PreviewScreen } from "./screens/PreviewScreen";
 import { SaveProjectScreen } from "./screens/SaveProjectScreen";
 import { ProjectLibraryScreen } from "./screens/ProjectLibraryScreen";
@@ -612,67 +613,7 @@ export default function App() {
                     muted
                   />
 
-                  {/* Overlays */}
-                  <div className="absolute inset-0 pointer-events-none select-none z-20">
-                    <svg className="w-full h-full absolute inset-0">
-                      <defs>
-                        <marker id="arrow-rev-yellow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill={BRAND_COLORS.accent} />
-                        </marker>
-                        <marker id="arrow-rev-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill={BRAND_COLORS.error} />
-                        </marker>
-                        <marker id="arrow-rev-white" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill="#FFFFFF" />
-                        </marker>
-                      </defs>
-
-                      {annotations.filter(a => a.type === "arrow" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((arrow: ArrowAnnotation) => (
-                        <line
-                          key={arrow.id}
-                          x1={`${arrow.startX * 100}%`}
-                          y1={`${arrow.startY * 100}%`}
-                          x2={`${arrow.endX * 100}%`}
-                          y2={`${arrow.endY * 100}%`}
-                          stroke={arrow.color === "yellow" ? BRAND_COLORS.accent : arrow.color === "red" ? BRAND_COLORS.error : "#FFFFFF"}
-                          strokeWidth="4"
-                          markerEnd={`url(#arrow-rev-${arrow.color})`}
-                        />
-                      ))}
-                    </svg>
-
-                    {annotations.filter(a => a.type === "circle" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((circle: CircleAnnotation) => (
-                      <div
-                        key={circle.id}
-                        className="absolute rounded-full border-4"
-                        style={{
-                          left: `${circle.x * 100}%`,
-                          top: `${circle.y * 100}%`,
-                          width: `${circle.radius * 200}%`,
-                          height: `${circle.radius * 200}%`,
-                          transform: "translate(-50%, -50%)",
-                          borderColor: circle.color === "yellow" ? BRAND_COLORS.accent : circle.color === "red" ? BRAND_COLORS.error : "#FFFFFF",
-                          borderStyle: circle.thickness === "bold" ? "solid" : "dashed",
-                          backgroundColor: "rgba(255, 176, 32, 0.05)"
-                        }}
-                      />
-                    ))}
-
-                    {annotations.filter(a => a.type === "text" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((text: TextAnnotation) => (
-                      <div
-                        key={text.id}
-                        className="absolute px-3 py-1.5 rounded-lg text-white font-semibold bg-black/80 shadow text-center max-w-[220px]"
-                        style={{
-                          left: `${text.x * 100}%`,
-                          top: `${text.y * 100}%`,
-                          transform: "translate(-50%, -50%)",
-                          fontSize: text.size === "small" ? "12px" : text.size === "large" ? "18px" : "15px",
-                        }}
-                      >
-                        {text.text}
-                      </div>
-                    ))}
-                  </div>
+                  <AnnotationCanvas videoRef={previewVideoRef} annotations={annotations} time={previewCurrentTime} zIndexClassName="z-20" />
                 </div>
 
                 <div className="p-6 bg-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-200">

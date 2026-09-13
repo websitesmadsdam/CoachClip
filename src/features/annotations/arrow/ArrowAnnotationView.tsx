@@ -35,14 +35,6 @@ export const ArrowAnnotationView: React.FC<ArrowAnnotationViewProps> = ({
   const ex = annotation.endX * videoBounds.width + videoBounds.left;
   const ey = annotation.endY * videoBounds.height + videoBounds.top;
 
-  // Arrow color
-  const strokeColor =
-    annotation.color === "yellow"
-      ? "#FFB020"
-      : annotation.color === "red"
-      ? "#D64545"
-      : "#FFFFFF";
-
   const handlePointerDown = (
     e: React.PointerEvent<HTMLDivElement>,
     part: "start" | "end" | "middle"
@@ -109,21 +101,7 @@ export const ArrowAnnotationView: React.FC<ArrowAnnotationViewProps> = ({
     <div className="absolute inset-0 pointer-events-none select-none z-10">
       {/* SVG Container for arrow vector */}
       <svg className="w-full h-full absolute inset-0">
-        <defs>
-          <marker
-            id={`arrowhead-${annotation.id}`}
-            viewBox="0 0 10 10"
-            refX="6"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 1 L 10 5 L 0 9 z" fill={strokeColor} />
-          </marker>
-        </defs>
-        
-        {/* Clickable thicker line background */}
+        {/* Clickable thicker line background; the arrow itself is drawn by AnnotationCanvas */}
         <line
           x1={sx}
           y1={sy}
@@ -133,18 +111,6 @@ export const ArrowAnnotationView: React.FC<ArrowAnnotationViewProps> = ({
           strokeWidth="20"
           className="cursor-pointer pointer-events-auto"
           onClick={handleSelect}
-        />
-
-        {/* Real visible vector */}
-        <line
-          x1={sx}
-          y1={sy}
-          x2={ex}
-          y2={ey}
-          stroke={strokeColor}
-          strokeWidth="4"
-          markerEnd={`url(#arrowhead-${annotation.id})`}
-          className={isSelected ? "drop-shadow-lg" : ""}
         />
       </svg>
 

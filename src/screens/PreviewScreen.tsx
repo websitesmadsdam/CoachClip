@@ -1,14 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * Documented exceptions: PreviewScreen maps untyped sub-annotation attributes with any.
  */
 
 import React, { useRef, useState, useEffect } from "react";
 import { Play, Pause, X, Edit, RotateCcw } from "lucide-react";
 import { CoachClipProject } from "../types";
 import { formatPreciseTime } from "../utils/videoUtils";
+import { AnnotationCanvas } from "../features/annotations/AnnotationCanvas";
 
 interface PreviewScreenProps {
   project: CoachClipProject;
@@ -74,11 +73,6 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
     setCurrentTime(target);
   };
 
-  // Filter annotations valid at this preview time
-  const activeAnnotations = project.annotations.filter(
-    (a) => currentTime >= a.startTime && currentTime <= a.endTime
-  );
-
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4 animate-fade-in">
       <div className="bg-slate-900 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col border border-slate-800 animate-scale-up">
@@ -118,111 +112,7 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
           {/* Click to play/pause hit region */}
           <div className="absolute inset-0 z-10 cursor-pointer" onClick={togglePlay} />
 
-          {/* Read-Only Overlays synchronized perfectly */}
-          <div className="absolute inset-0 pointer-events-none select-none z-20">
-            {/* SVG Layer for Arrows */}
-            <svg className="w-full h-full absolute inset-0">
-              <defs>
-                <marker
-                  id="arrow-pre-yellow"
-                  viewBox="0 0 10 10"
-                  refX="6"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#FFB020" />
-                </marker>
-                <marker
-                  id="arrow-pre-red"
-                  viewBox="0 0 10 10"
-                  refX="6"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#D64545" />
-                </marker>
-                <marker
-                  id="arrow-pre-white"
-                  viewBox="0 0 10 10"
-                  refX="6"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#FFFFFF" />
-                </marker>
-              </defs>
-
-              {activeAnnotations
-                .filter((a) => a.type === "arrow")
-                .map((arrow: any) => (
-                  <line
-                    key={arrow.id}
-                    x1={`${arrow.startX * 100}%`}
-                    y1={`${arrow.startY * 100}%`}
-                    x2={`${arrow.endX * 100}%`}
-                    y2={`${arrow.endY * 100}%`}
-                    stroke={
-                      arrow.color === "yellow"
-                        ? "#FFB020"
-                        : arrow.color === "red"
-                        ? "#D64545"
-                        : "#FFFFFF"
-                    }
-                    strokeWidth="4"
-                    markerEnd={`url(#arrow-pre-${arrow.color})`}
-                  />
-                ))}
-            </svg>
-
-            {/* Circles Layer */}
-            {activeAnnotations
-              .filter((a) => a.type === "circle")
-              .map((circle: any) => (
-                <div
-                  key={circle.id}
-                  className="absolute rounded-full border-4"
-                  style={{
-                    left: `${circle.x * 100}%`,
-                    top: `${circle.y * 100}%`,
-                    width: `${circle.radius * 200}%`,
-                    height: `${circle.radius * 200}%`,
-                    transform: "translate(-50%, -50%)",
-                    borderColor:
-                      circle.color === "yellow"
-                        ? "#FFB020"
-                        : circle.color === "red"
-                        ? "#D64545"
-                        : "#FFFFFF",
-                    borderStyle: circle.thickness === "bold" ? "solid" : "dashed",
-                    backgroundColor: "rgba(255, 176, 32, 0.05)",
-                  }}
-                />
-              ))}
-
-            {/* Texts Layer */}
-            {activeAnnotations
-              .filter((a) => a.type === "text")
-              .map((text: any) => (
-                <div
-                  key={text.id}
-                  className="absolute px-3 py-1.5 rounded-lg text-white font-semibold bg-black/80 text-center max-w-[220px]"
-                  style={{
-                    left: `${text.x * 100}%`,
-                    top: `${text.y * 100}%`,
-                    transform: "translate(-50%, -50%)",
-                    fontSize: text.size === "small" ? "12px" : text.size === "large" ? "18px" : "15px",
-                  }}
-                >
-                  {text.text}
-                </div>
-              ))}
-          </div>
+          <AnnotationCanvas videoRef={videoRef} annotations={project.annotations} time={currentTime} zIndexClassName="z-20" />
         </div>
 
         {/* Video controls bottom bar */}

@@ -26,14 +26,6 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
   const { startDrag: startCenterDrag } = usePointerDrag();
   const { startDrag: startResizeDrag } = usePointerDrag();
 
-  // Color mapping
-  const strokeColor =
-    annotation.color === "yellow"
-      ? "#FFB020"
-      : annotation.color === "red"
-      ? "#D64545"
-      : "#FFFFFF";
-
   const handleCenterDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!onUpdate) {
       if (onSelect) onSelect();
@@ -105,18 +97,8 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
         pointerEvents: "auto",
       }}
     >
-      {/* Circle Shape */}
-      <div
-        className={`w-full h-full rounded-full transition-shadow ${
-          isSelected ? "shadow-lg ring-2 ring-blue-400" : "group-hover:opacity-95"
-        }`}
-        style={{
-          border: `${annotation.thickness === "bold" ? 4 : 2}px ${
-            annotation.thickness === "bold" ? "solid" : "dashed"
-          } ${strokeColor}`,
-          backgroundColor: "rgba(255, 176, 32, 0.08)",
-        }}
-      />
+      {/* Hit area; the circle itself is drawn by AnnotationCanvas */}
+      <div className={`w-full h-full rounded-full transition-shadow ${isSelected ? "ring-2 ring-blue-400" : ""}`} />
 
       {/* Resize Handle (Only visible when selected and updatable) */}
       {isSelected && onUpdate && (

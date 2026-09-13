@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Annotation, TextAnnotation, CircleAnnotation, ArrowAnnotation, FreezeAnnotation } from "../../types";
 import { AnnotationOverlay } from "./AnnotationOverlay";
+import { AnnotationCanvas } from "./AnnotationCanvas";
 import { AnnotationToolbar } from "./AnnotationToolbar";
 import { AnnotationList } from "./AnnotationList";
 import { TextAnnotationForm } from "./text/TextAnnotationForm";
@@ -39,7 +40,10 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   onBack,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
+  // Real video size so letterboxing (e.g. portrait phone video) places annotations correctly
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+
   // State for all saved annotations
   const [annotations, setAnnotations] = useState<Annotation[]>(initialAnnotations);
   
@@ -182,6 +186,12 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
               preload="auto"
               playsInline
               muted
+              onLoadedMetadata={(e) => setVideoSize({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight })}
+            />
+            <AnnotationCanvas
+              videoRef={videoRef}
+              annotations={draftAnnotation ? [...annotations, draftAnnotation as Annotation] : annotations}
+              time={currentTime}
             />
 
             {/* Event Overlay */}
@@ -195,6 +205,8 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
               draftAnnotation={draftAnnotation}
               onUpdateDraft={setDraftAnnotation}
               containerRef={containerRef}
+              videoWidth={videoSize.width || undefined}
+              videoHeight={videoSize.height || undefined}
             />
 
             {/* Instruction Overlay when tool is chosen but draft not drawn */}
@@ -211,26 +223,11 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
               </div>
             )}
 
-            {/* Active Freeze Overlay (Large visual countdown timer) */}
+            {/* Freeze: the paused frame and its annotations stay visible, like in the exported clip */}
             {freezeActiveId && (
-              <div className="absolute inset-0 bg-black/55 flex flex-col items-center justify-center z-40 backdrop-blur-xs">
-                <div className="bg-slate-900 border-2 border-sky-400 rounded-2xl p-6 text-center text-white flex flex-col items-center gap-4 shadow-2xl animate-scale-up">
-                  <div className="relative w-16 h-16 flex items-center justify-center">
-                    <Snowflake className="w-10 h-10 text-sky-400 animate-pulse" />
-                    <svg className="absolute inset-0 w-full h-full -rotate-90">
-                      <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.15)" strokeWidth="4" fill="transparent" />
-                      <circle cx="32" cy="32" r="28" stroke="#38bdf8" strokeWidth="4" fill="transparent"
-                        strokeDasharray={`${2 * Math.PI * 28}`}
-                        strokeDashoffset={`${2 * Math.PI * 28 * (1 - freezeRemaining / 3)}`}
-                        className="transition-all duration-1000"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm uppercase tracking-wider text-sky-400 leading-none">AFSPILNING FRYST</h4>
-                    <p className="text-[11px] text-slate-400 mt-1">Gennemser situationen ({freezeRemaining}s)</p>
-                  </div>
-                </div>
+              <div className="absolute top-3 right-3 z-40 bg-slate-900/85 border border-sky-400/60 text-white rounded-full px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-bold shadow-lg pointer-events-none">
+                <Snowflake className="w-3.5 h-3.5 text-sky-400" />
+                <span>Frys · {freezeRemaining}s</span>
               </div>
             )}
           </div>
