@@ -14,6 +14,7 @@ import { FileCleanupService } from "./server/src/services/fileCleanupService";
 import { config, validateConfig } from "./server/src/config";
 import { exportQueue } from "./server/src/services/exportQueue";
 import { logger } from "./server/src/utils/logger";
+import { createRateLimiter, RateLimitStore } from "./server/src/middleware/rateLimiter";
 
 // Helper for non-blocking disk space probe
 function getFreeDiskSpace(): Promise<string> {
@@ -117,120 +118,40 @@ async function startServer() {
     next();
   });
 
-  // Sliding-window / Fixed-window rate limiting map
-  const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+  // Fixed-window rate limiting; all limits come from config
+  const rateLimitStore: RateLimitStore = new Map();
 
-  // General API limit: 100 requests/min
-  const generalLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
-    const ipKey = `general_${Array.isArray(ip) ? ip[0] : ip}`;
-    const now = Date.now();
-    const windowMs = 60000;
-    const maxRequests = 100;
+  const generalLimiter = createRateLimiter({
+    store: rateLimitStore,
+    keyPrefix: "general",
+    maxRequests: config.rateLimitGeneral,
+    windowMs: config.rateLimitGeneralWindowSeconds * 1000,
+    message: (s) => `Du har sendt for mange anmodninger. Prøv igen om ${s} sekunder.`,
+  });
 
-    const rateData = rateLimitMap.get(ipKey);
-    if (!rateData || now > rateData.resetTime) {
-      rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
-      next();
-    } else {
-      rateData.count++;
-      if (rateData.count > maxRequests) {
-        const secondsLeft = Math.ceil((rateData.resetTime - now) / 1000);
-        res.setHeader("Retry-After", secondsLeft.toString());
-        res.status(429).json({
-          error: "TOO_MANY_REQUESTS",
-          message: `Du har sendt for mange anmodninger. Prøv igen om ${secondsLeft} sekunder.`
-        });
-      } else {
-        next();
-      }
-    }
-  };
+  const exportsCreateLimiter = createRateLimiter({
+    store: rateLimitStore,
+    keyPrefix: "exports_create",
+    maxRequests: config.rateLimitExportCreate,
+    windowMs: config.rateLimitExportCreateWindowSeconds * 1000,
+    message: (s) => `Du har oprettet for mange eksporter. Prøv igen om ${s} sekunder.`,
+  });
 
-  // POST exports limit
-  const exportsCreateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.method !== "POST") {
-      next();
-      return;
-    }
-    const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
-    const ipKey = `exports_create_${Array.isArray(ip) ? ip[0] : ip}`;
-    const now = Date.now();
-    const windowMs = config.rateLimitExportCreateWindowSeconds * 1000;
-    const maxRequests = config.rateLimitExportCreate;
+  const exportsStatusLimiter = createRateLimiter({
+    store: rateLimitStore,
+    keyPrefix: "exports_status",
+    maxRequests: config.rateLimitStatus,
+    windowMs: config.rateLimitStatusWindowSeconds * 1000,
+    message: (s) => `Du har foretaget for mange statusforespørgsler. Prøv igen om ${s} sekunder.`,
+  });
 
-    const rateData = rateLimitMap.get(ipKey);
-    if (!rateData || now > rateData.resetTime) {
-      rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
-      next();
-    } else {
-      rateData.count++;
-      if (rateData.count > maxRequests) {
-        const secondsLeft = Math.ceil((rateData.resetTime - now) / 1000);
-        res.setHeader("Retry-After", secondsLeft.toString());
-        res.status(429).json({
-          error: "TOO_MANY_REQUESTS",
-          message: `Du har oprettet for mange eksporter. Prøv igen om ${secondsLeft} sekunder.`
-        });
-      } else {
-        next();
-      }
-    }
-  };
-
-  // GET exports status limit
-  const exportsStatusLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
-    const ipKey = `exports_status_${Array.isArray(ip) ? ip[0] : ip}`;
-    const now = Date.now();
-    const windowMs = config.rateLimitStatusWindowSeconds * 1000;
-    const maxRequests = config.rateLimitStatus;
-
-    const rateData = rateLimitMap.get(ipKey);
-    if (!rateData || now > rateData.resetTime) {
-      rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
-      next();
-    } else {
-      rateData.count++;
-      if (rateData.count > maxRequests) {
-        const secondsLeft = Math.ceil((rateData.resetTime - now) / 1000);
-        res.setHeader("Retry-After", secondsLeft.toString());
-        res.status(429).json({
-          error: "TOO_MANY_REQUESTS",
-          message: `Du har foretaget for mange statusforespørgsler. Prøv igen om ${secondsLeft} sekunder.`
-        });
-      } else {
-        next();
-      }
-    }
-  };
-
-  // GET exports download limit
-  const exportsDownloadLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
-    const ipKey = `exports_download_${Array.isArray(ip) ? ip[0] : ip}`;
-    const now = Date.now();
-    const windowMs = config.rateLimitDownloadWindowSeconds * 1000;
-    const maxRequests = config.rateLimitDownload;
-
-    const rateData = rateLimitMap.get(ipKey);
-    if (!rateData || now > rateData.resetTime) {
-      rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
-      next();
-    } else {
-      rateData.count++;
-      if (rateData.count > maxRequests) {
-        const secondsLeft = Math.ceil((rateData.resetTime - now) / 1000);
-        res.setHeader("Retry-After", secondsLeft.toString());
-        res.status(429).json({
-          error: "TOO_MANY_REQUESTS",
-          message: `Du har foretaget for mange downloads. Prøv igen om ${secondsLeft} sekunder.`
-        });
-      } else {
-        next();
-      }
-    }
-  };
+  const exportsDownloadLimiter = createRateLimiter({
+    store: rateLimitStore,
+    keyPrefix: "exports_download",
+    maxRequests: config.rateLimitDownload,
+    windowMs: config.rateLimitDownloadWindowSeconds * 1000,
+    message: (s) => `Du har foretaget for mange downloads. Prøv igen om ${s} sekunder.`,
+  });
 
   // Mount rate limiters
   app.use("/api/", generalLimiter);

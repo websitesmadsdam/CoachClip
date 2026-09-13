@@ -3,23 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type ExportStatus =
-  | "not_exported"
-  | "uploading"
-  | "queued"
-  | "processing"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "expired";
-
-export type ExportStage =
-  | "validating"
-  | "trimming"
-  | "rendering_annotations"
-  | "rendering_freezes"
-  | "encoding"
-  | "finalizing";
+// Single source of annotation types for browser preview and FFmpeg render.
+// Export job status/stage types live in ./exportJob.ts.
 
 export type Annotation =
   | TextAnnotation

@@ -13,8 +13,10 @@ import fs from "fs";
 import { exportJobService } from "../services/exportJobService";
 import { FfmpegExportService } from "../services/ffmpegExportService";
 import { exportQueue } from "../services/exportQueue";
-import { ExportRequestMetadata } from "../types/exportTypes";
-import { FreezeAnnotation } from "../../../src/types";
+import { ExportJob } from "../types/exportTypes";
+import { ExportRequestMetadata } from "../../../shared/exportSchema";
+import { FreezeAnnotation } from "../../../shared/annotations";
+import { ExportJobResponse } from "../../../shared/exportJob";
 
 import { config } from "../config";
 
@@ -340,6 +342,21 @@ exportRouter.post("/", upload.single("video"), async (req: Request, res: Respons
   });
 });
 
+// Strip server-internal file paths; completed jobs get an absolute downloadUrl for the current host
+function toExportJobResponse(job: ExportJob, origin: string): ExportJobResponse {
+  const { inputFilePath, outputFilePath, ...publicJob } = job;
+  if (publicJob.status === "completed" && publicJob.output) {
+    return {
+      ...publicJob,
+      output: {
+        ...publicJob.output,
+        downloadUrl: `${origin}${publicJob.output.downloadUrl}`,
+      },
+    };
+  }
+  return publicJob;
+}
+
 // 2. Query Export Job Status Endpoint
 exportRouter.get("/:jobId", (req: Request, res: Response) => {
   const jobId = req.params.jobId;
@@ -354,20 +371,7 @@ exportRouter.get("/:jobId", (req: Request, res: Response) => {
     return;
   }
 
-  // If completed, update downloadUrl dynamically to include current host origin
-  if (job.status === "completed" && job.output) {
-    const origin = getOrigin(req);
-    res.json({
-      ...job,
-      output: {
-        ...job.output,
-        downloadUrl: `${origin}${job.output.downloadUrl}`,
-      },
-    });
-    return;
-  }
-
-  res.json(job);
+  res.json(toExportJobResponse(job, getOrigin(req)));
 });
 
 // 3. Download Processed Video Endpoint

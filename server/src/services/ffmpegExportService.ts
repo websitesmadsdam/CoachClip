@@ -6,9 +6,9 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { ExportRequestMetadata } from "../types/exportTypes";
+import { ExportRequestMetadata } from "../../../shared/exportSchema";
 import { exportJobService } from "./exportJobService";
-import { Annotation, FreezeAnnotation } from "../../../src/types";
+import { Annotation, FreezeAnnotation } from "../../../shared/annotations";
 import { getCircleGeometry, getArrowGeometry, getTextGeometry } from "../../../shared/annotationGeometry";
 import { sanitizeExportFileName } from "../../../shared/exportSchema";
 import { config } from "../config";

@@ -8,6 +8,24 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Loader2, CheckCircle2, AlertTriangle, ShieldAlert, X } from "lucide-react";
 import { CoachClipProject, ExportStatus } from "../types";
+import { EXPORT_POLL_INTERVAL_MS, ExportJobResponse, ExportJobStage, ExportJobStatus } from "../../shared/exportJob";
+
+const STAGE_LABELS: Record<ExportJobStage, string> = {
+  waiting: "Sat i kø...",
+  validating: "Kontrollerer video...",
+  trimming: "Klipper situation...",
+  rendering_annotations: "Tilføjer markeringer...",
+  rendering_freezes: "Tilføjer frysebillede...",
+  concatenating: "Samler klippet...",
+  encoding: "Opretter MP4...",
+  finalizing: "Gør klar...",
+  completed: "Gør klar...",
+};
+
+// The persisted project status says "exported" where the server job says "completed"
+function toProjectExportStatus(jobStatus: ExportJobStatus): ExportStatus {
+  return jobStatus === "completed" ? "exported" : jobStatus;
+}
 
 interface ExportScreenProps {
   project: CoachClipProject;
@@ -144,25 +162,14 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
         if (!response.ok) {
           throw new Error(`Server status ${response.status}`);
         }
-        const job = await response.json();
+        const job: ExportJobResponse = await response.json();
 
         // Update local status & progress
-        setStatus(job.status);
+        setStatus(toProjectExportStatus(job.status));
         setProgress(job.progress || 0);
 
-        // Map stage to beautiful Danish subtitles
-        if (job.stage === "validating") {
-          setStage("Kontrollerer video...");
-        } else if (job.stage === "trimming") {
-          setStage("Klipper situation...");
-        } else if (job.stage === "rendering_annotations") {
-          setStage("Tilføjer markeringer...");
-        } else if (job.stage === "rendering_freezes") {
-          setStage("Tilføjer frysebillede...");
-        } else if (job.stage === "encoding") {
-          setStage("Opretter MP4...");
-        } else if (job.stage === "finalizing") {
-          setStage("Gør klar...");
+        if (job.stage) {
+          setStage(STAGE_LABELS[job.stage]);
         } else if (job.status === "processing") {
           setStage("Behandler video...");
         }
@@ -189,7 +196,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
         // Tolerates brief connection drops, but if persistent, alert
         console.error("Polling error:", err);
       }
-    }, 1200);
+    }, EXPORT_POLL_INTERVAL_MS);
   };
 
   const handleFailure = (msg: string) => {

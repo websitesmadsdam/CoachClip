@@ -15,6 +15,8 @@ export type AppConfig = {
   corsOrigin: string;
   exportApiUrl?: string;
   e2eProcessingDelayMs: number;
+  rateLimitGeneral: number;
+  rateLimitGeneralWindowSeconds: number;
   rateLimitExportCreate: number;
   rateLimitExportCreateWindowSeconds: number;
   rateLimitStatus: number;
@@ -38,6 +40,9 @@ export const config: AppConfig = {
   corsOrigin: getEnv("CORS_ORIGIN", "*"),
   exportApiUrl: process.env.VITE_EXPORT_API_URL,
   e2eProcessingDelayMs: Number(getEnv("E2E_PROCESSING_DELAY_MS", "0")),
+  // Applies to every /api/ request, including status polling (~50/min per running export)
+  rateLimitGeneral: Number(getEnv("RATE_LIMIT_GENERAL", "300")),
+  rateLimitGeneralWindowSeconds: Number(getEnv("RATE_LIMIT_GENERAL_WINDOW_SECONDS", "60")),
   rateLimitExportCreate: Number(getEnv("RATE_LIMIT_EXPORT_CREATE", "5")),
   rateLimitExportCreateWindowSeconds: Number(getEnv("RATE_LIMIT_EXPORT_CREATE_WINDOW_SECONDS", "600")),
   rateLimitStatus: Number(getEnv("RATE_LIMIT_STATUS", "180")),
@@ -62,6 +67,12 @@ export function validateConfig() {
   }
   if (isNaN(config.ffmpegTimeoutSeconds) || config.ffmpegTimeoutSeconds <= 0) {
     throw new Error("INVALID_CONFIG: FFMPEG_TIMEOUT_SECONDS must be a positive number");
+  }
+  if (isNaN(config.rateLimitGeneral) || config.rateLimitGeneral <= 0) {
+    throw new Error("INVALID_CONFIG: RATE_LIMIT_GENERAL must be a positive number");
+  }
+  if (isNaN(config.rateLimitGeneralWindowSeconds) || config.rateLimitGeneralWindowSeconds <= 0) {
+    throw new Error("INVALID_CONFIG: RATE_LIMIT_GENERAL_WINDOW_SECONDS must be a positive number");
   }
   if (isNaN(config.rateLimitExportCreate) || config.rateLimitExportCreate <= 0) {
     throw new Error("INVALID_CONFIG: RATE_LIMIT_EXPORT_CREATE must be a positive number");
