@@ -1,52 +1,31 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 
 const E2E_ORIGIN = "http://127.0.0.1:3001";
 
+// Runs the built app in Google Chrome under the production security headers (see vite.config.ts).
+// Chrome is required because exports encode H.264, which Playwright's bundled Chromium cannot.
 export default defineConfig({
   testDir: "./e2e",
   testIgnore: ["engine/**"],
-  timeout: 60000,
-  fullyParallel: true,
+  timeout: 120_000,
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  retries: process.env.CI ? 1 : 0,
   reporter: "line",
   use: {
     baseURL: E2E_ORIGIN,
+    channel: "chrome",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
   webServer: {
-    command: "npm run dev > e2e-server.log 2>&1",
-    url: `${E2E_ORIGIN}/api/ready`,
+    command: "npm run build && npx vite preview --host 127.0.0.1 --port 3001 --strictPort",
+    url: E2E_ORIGIN,
+    timeout: 180_000,
     reuseExistingServer: false,
     stdout: "ignore",
     stderr: "pipe",
-    env: {
-      PORT: "3001",
-      NODE_ENV: "test",
-      IS_E2E: "true",
-      E2E_TEST_MODE: "true",
-      CORS_ORIGIN: E2E_ORIGIN,
-      E2E_PROCESSING_DELAY_MS: "3000",
-      MAX_CONCURRENT_EXPORTS: "2",
-      FFMPEG_TIMEOUT_SECONDS: "120",
-      OUTPUT_TTL_MINUTES: "1",
-      RATE_LIMIT_GENERAL: "1000",
-      RATE_LIMIT_GENERAL_WINDOW_SECONDS: "60",
-      RATE_LIMIT_EXPORT_CREATE: "50",
-      RATE_LIMIT_EXPORT_CREATE_WINDOW_SECONDS: "60",
-      RATE_LIMIT_STATUS: "1000",
-      RATE_LIMIT_STATUS_WINDOW_SECONDS: "60",
-      RATE_LIMIT_DOWNLOAD: "100",
-      RATE_LIMIT_DOWNLOAD_WINDOW_SECONDS: "60",
-    },
   },
 });

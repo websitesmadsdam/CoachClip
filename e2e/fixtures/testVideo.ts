@@ -3,45 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Page } from "@playwright/test";
-
+// Committed fixture: 640x360, 30 fps, 8 s, 440 Hz tone with silent gaps (see scripts/generateExportFixtures.ts)
 export const TEST_VIDEO = {
-  path: "tmp/e2e/demo_test_video.mp4",
+  path: "e2e/fixtures/media/landscape-tone.mp4",
   durationSeconds: 8,
-  trimStart: 1,
-  trimEnd: 6,
-  freezeTime: 3,
-  freezeDuration: 3,
+  width: 640,
+  height: 360,
 };
-
-export type ExportCreateObservation = {
-  requestUrl: string;
-  requestMethod: string;
-  status: number;
-  responseBody: string;
-  contentType: string | null;
-};
-
-export async function waitForExportCreation(
-  page: Page
-): Promise<ExportCreateObservation> {
-  const response = await page.waitForResponse(candidate => {
-    try {
-      const url = new URL(candidate.url());
-      return (
-        candidate.request().method() === "POST" &&
-        url.pathname === "/api/exports"
-      );
-    } catch {
-      return false;
-    }
-  });
-
-  return {
-    requestUrl: response.url(),
-    requestMethod: response.request().method(),
-    status: response.status(),
-    responseBody: await response.text(),
-    contentType: response.headers()["content-type"] ?? null,
-  };
-}

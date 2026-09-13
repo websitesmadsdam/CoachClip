@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("CoachClip App - E2E Tests", () => {
   test("should successfully load the homepage with Danish content", async ({ page }) => {
-    // Navigate to base URL (Vite + Express on 3000)
+    // Navigate to the built app
     await page.goto("/");
 
     // 1. Verify primary branding / title

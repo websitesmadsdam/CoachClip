@@ -1,7 +1,15 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
+
+type VercelConfig = { headers: { source: string; headers: { key: string; value: string }[] }[] };
+
+// `vite preview` serves the production build with the same security headers as Vercel, so the
+// E2E tests exercise the app under the real Content-Security-Policy.
+const vercelConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'vercel.json'), 'utf8')) as VercelConfig;
+const securityHeaders = Object.fromEntries(vercelConfig.headers[0].headers.map(({ key, value }) => [key, value]));
 
 export default defineConfig(() => {
   return {
@@ -11,12 +19,8 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    preview: {
+      headers: securityHeaders,
     },
     test: {
       exclude: ['e2e/**/*', 'node_modules/**/*', 'dist/**/*'],
