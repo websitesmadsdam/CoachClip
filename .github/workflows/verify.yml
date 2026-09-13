@@ -1,8 +1,8 @@
-name: Verify CoachClip MVP
+name: Verify CoachClip
 
 on:
   push:
-    branches: [ main, google/fix-production-gaps, ci/verify-container-svg-support ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -20,18 +20,13 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install System Dependencies (FFmpeg)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
       - name: Install Node Dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium and Google Chrome
-        run: npx playwright install --with-deps chromium chrome
+      - name: Install Google Chrome for Playwright
+        run: npx playwright install --with-deps chrome
 
-      - name: Verify (Lint, Typecheck, Unit Tests, Build, Smoke Tests, E2E)
+      - name: Verify (Lint, Typecheck, Unit, Build, Engine, E2E)
         run: npm run verify
 
       - name: Upload Playwright failure artifacts
@@ -42,103 +37,4 @@ jobs:
           path: |
             playwright-report/
             test-results/
-            e2e-server.log
           if-no-files-found: ignore
-
-  docker:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Build Docker Image
-        run: docker build -t coachclip:ci .
-
-      - name: Run Docker Container
-        run: |
-          docker run -d --rm \
-            --name coachclip-ci \
-            -p 3000:3000 \
-            -e MAX_CONCURRENT_EXPORTS=2 \
-            -e FFMPEG_TIMEOUT_SECONDS=120 \
-            -e CORS_ORIGIN=http://localhost:3000 \
-            coachclip:ci
-
-      - name: Wait for Healthcheck
-        run: |
-          for i in {1..20}; do
-            if curl -s http://127.0.0.1:3000/api/live | grep -q '"status":"ok"'; then
-              echo "Liveness check passed!"
-              if curl -s http://127.0.0.1:3000/api/ready | grep -q '"status":"ready"'; then
-                echo "Readiness check passed!"
-                exit 0
-              fi
-            fi
-            echo "Waiting for container to become healthy..."
-            sleep 2
-          done
-          echo "Healthcheck failed!"
-          docker logs coachclip-ci
-          exit 1
-
-      - name: Assert container FFmpeg can decode SVG
-        run: |
-          echo "--- container ffmpeg version ---"
-          docker exec coachclip-ci ffmpeg -hide_banner -version | head -1
-          echo "--- librsvg in build configuration? ---"
-          docker exec coachclip-ci sh -c 'ffmpeg -hide_banner -version | grep -o -- "--enable-librsvg"' \
-            || { echo "FAIL: container ffmpeg is built WITHOUT librsvg - annotation export is broken in production"; exit 1; }
-          echo "--- svg decoders available? ---"
-          docker exec coachclip-ci sh -c 'ffmpeg -hide_banner -decoders | grep -i svg' \
-            || { echo "FAIL: container ffmpeg has NO svg decoder - annotation export is broken in production"; exit 1; }
-
-      - name: Render an SVG overlay inside the container
-        run: |
-          docker exec -i coachclip-ci sh -s <<'EOF'
-          set -e
-          cd /app/tmp
-          cat > svgcheck.svg <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">
-            <rect x="40" y="40" width="560" height="280" fill="none" stroke="#ff0000" stroke-width="8"/>
-            <text x="60" y="200" font-size="48" fill="#ff0000">CoachClip</text>
-          </svg>
-          SVG
-          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=duration=2:size=640x360:rate=30 \
-            -c:v libx264 -pix_fmt yuv420p -y svgcheck_in.mp4
-          ffmpeg -hide_banner -loglevel error -i svgcheck_in.mp4 -i svgcheck.svg \
-            -filter_complex "[0:v]scale=640:360[v0]; [v0][1:v]overlay=0:0:enable='between(t,0,2)'[v_out]" \
-            -map "[v_out]" -c:v libx264 -pix_fmt yuv420p -r 30 -y svgcheck_out.mp4
-          test -s svgcheck_out.mp4
-          echo "OK: container ffmpeg decoded an SVG and rendered the overlay"
-          rm -f svgcheck.svg svgcheck_in.mp4 svgcheck_out.mp4
-          EOF
-
-      - name: Install FFmpeg tools for host smoke validation
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          ffmpeg -version
-          ffprobe -version
-
-      - name: Run API Smoke Test against Container
-        env:
-          SMOKE_API_BASE_URL: http://127.0.0.1:3000
-        run: |
-          npm ci
-          npx tsx scripts/smokeApiSimple.ts
-
-      - name: Show container logs on failure
-        if: failure()
-        run: docker logs coachclip-ci || true
-
-      - name: Stop Container
-        if: always()
-        run: |
-          docker stop coachclip-ci || true

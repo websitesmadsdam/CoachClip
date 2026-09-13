@@ -215,6 +215,7 @@ Skala: `s = min(width, height) / 1080`. Alle pixelmål herunder er ved `s = 1`.
 |---|---|---|
 | `UNSUPPORTED_BROWSER` | Mangler WebCodecs eller H.264-kodning i output-størrelsen | "Din browser kan ikke lave klip. Opdatér til iOS 26 eller nyere, eller brug Chrome, Edge eller Safari på en computer." |
 | `UNREADABLE_VIDEO` | Container kan ikke læses, eller videosporet kan ikke afkodes | "Videoen kan ikke læses i denne browser. Prøv en anden video eller en anden browser." |
+| `INVALID_PROJECT` | Projektet fejler valideringen (klip, varighed eller markeringer) | Valideringens egen danske besked, fx "Det valgte klip skal være mindst 0,5 sekunder." |
 | `STORAGE_FULL` | `QuotaExceededError` | "Der er ikke plads nok på enheden til klippet. Frigør plads, og prøv igen." |
 | `INTERRUPTED` | Fejl efter at siden har været skjult | "Eksporten stoppede, fordi skærmen blev slukket eller appen lukket. Prøv igen, og hold skærmen tændt." |
 | `CANCELLED` | Træneren trykkede Afbryd | "Eksporten blev afbrudt." (neutral visning) |
