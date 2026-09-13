@@ -31,10 +31,12 @@
     "verify": "npm run verify:lint && npm run verify:typecheck && npm run verify:unit && npm run verify:build && npm run verify:smoke && npm run verify:e2e"
   },
   "dependencies": {
+    "@mediabunny/aac-encoder": "1.56.2",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "express": "^5.2.1",
     "lucide-react": "^0.546.0",
+    "mediabunny": "1.56.2",
     "motion": "^12.23.24",
     "multer": "^2.2.0",
     "react": "^19.0.1",
