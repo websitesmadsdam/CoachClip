@@ -243,16 +243,28 @@ export class FfmpegExportService {
     const output = await runProcess("ffprobe", [
       "-v", "error",
       "-select_streams", "v:0",
-      "-show_entries", "stream=width,height,duration",
+      "-show_entries", "stream=width,height,duration:format=duration",
       "-of", "json",
       filePath
     ]);
+    return this.parseVideoProbeOutput(output);
+  }
+
+  // Many MOV files (e.g. from iPhone) leave stream.duration empty, so fall back to the container duration
+  public static parseVideoProbeOutput(output: string): { width: number; height: number; duration: number } {
     const data = JSON.parse(output);
     const stream = data.streams?.[0];
     if (!stream || !stream.width || !stream.height) {
       throw new Error("ffprobe: Missing valid video stream dimensions");
     }
-    const duration = Number(stream.duration || 0);
+    const streamDuration = Number(stream.duration);
+    const formatDuration = Number(data.format?.duration);
+    let duration = 0;
+    if (Number.isFinite(streamDuration) && streamDuration > 0) {
+      duration = streamDuration;
+    } else if (Number.isFinite(formatDuration) && formatDuration > 0) {
+      duration = formatDuration;
+    }
     return {
       width: Number(stream.width),
       height: Number(stream.height),
