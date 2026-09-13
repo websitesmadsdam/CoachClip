@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { Film, Play, Trash2, Edit, Copy, Plus } from "lucide-react";
 import { CoachClipProject } from "../types";
+import { isProjectExported } from "../utils/projectStatus";
 
 interface ProjectLibraryScreenProps {
   projects: CoachClipProject[];
@@ -30,8 +31,7 @@ export const ProjectLibraryScreen: React.FC<ProjectLibraryScreenProps> = ({
 
   const getFilteredProjects = () => {
     return projects.filter((proj) => {
-      const isExported = (proj.export?.status === "exported" || proj.exportStatus === "exported") && 
-        !(proj.export?.status === "expired" || (proj.export?.expiresAt && new Date(proj.export.expiresAt) < new Date()));
+      const isExported = isProjectExported(proj);
       if (filter === "all") return true;
       if (filter === "exported") return isExported;
       if (filter === "not_exported") return !isExported;
@@ -152,34 +152,16 @@ export const ProjectLibraryScreen: React.FC<ProjectLibraryScreenProps> = ({
                       {proj.sourceVideo.fileName}
                     </span>
                   </div>
-
-                  {proj.export?.status === "expired" || (proj.export?.expiresAt && new Date(proj.export.expiresAt) < new Date()) ? (
-                    <div className="mt-3.5 bg-red-50 border border-red-100/50 text-brand-error p-3 rounded-xl text-[11px] font-semibold leading-relaxed">
-                      Eksportfilen er udløbet. Eksportér projektet igen for at oprette en ny videofil.
-                    </div>
-                  ) : null}
                 </div>
 
                 <div className="flex justify-between items-center mt-5 pt-3 border-t border-slate-100">
-                  {(() => {
-                    const isExpired = proj.export?.status === "expired" || 
-                      (proj.export?.expiresAt && new Date(proj.export.expiresAt) < new Date());
-                    const isExported = proj.export?.status === "exported" || proj.exportStatus === "exported";
-
-                    return (
-                      <span
-                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                          isExpired
-                            ? "bg-red-50 text-brand-error"
-                            : isExported
-                            ? "bg-green-50 text-brand-success"
-                            : "bg-amber-50 text-amber-600"
-                        }`}
-                      >
-                        {isExpired ? "Udløbet" : isExported ? "Eksporteret" : "Ikke eksporteret"}
-                      </span>
-                    );
-                  })()}
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                      isProjectExported(proj) ? "bg-green-50 text-brand-success" : "bg-amber-50 text-amber-600"
+                    }`}
+                  >
+                    {isProjectExported(proj) ? "Eksporteret" : "Ikke eksporteret"}
+                  </span>
 
                   <div className="flex gap-1.5">
                     <button

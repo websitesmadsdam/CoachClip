@@ -5,17 +5,19 @@
 
 import type { Annotation } from "../shared/annotations";
 
-// Persisted project export state (IndexedDB). Uses "exported" where the server job says "completed";
-// see shared/exportJob.ts for the server job status.
-export type ExportStatus =
-  | "not_exported"
-  | "uploading"
-  | "queued"
-  | "processing"
-  | "exported"
-  | "failed"
-  | "cancelled"
-  | "expired";
+// Persisted per project in IndexedDB. Projects saved by older versions can still contain server-era
+// fields (exportedVideoUrl, export.jobId/downloadUrl/expiresAt, other statuses); they are ignored.
+export type ExportStatus = "not_exported" | "exported";
+
+export type ProjectExport = {
+  status: "exported";
+  fileName: string;
+  fileSize: number;
+  duration: number;
+  width: number;
+  height: number;
+  exportedAt: string;
+};
 
 export type CoachClipProject = {
   id: string;
@@ -37,17 +39,8 @@ export type CoachClipProject = {
   category?: string;
   feedbackType?: "positive" | "development";
   collectionId?: string;
-  exportStatus?: ExportStatus; // backward compatibility
-  exportedVideoUrl?: string; // backward compatibility
-  export?: {
-    jobId?: string;
-    status: ExportStatus;
-    fileName?: string;
-    fileSize?: number;
-    duration?: number;
-    downloadUrl?: string;
-    expiresAt?: string;
-  };
+  exportStatus?: ExportStatus;
+  export?: ProjectExport;
 };
 
 export type {
