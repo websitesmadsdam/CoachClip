@@ -33,11 +33,12 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
     }
     e.stopPropagation();
     if (onSelect) onSelect();
+    // Read now: React clears e.currentTarget once this handler returns, before any pointermove
+    const container = e.currentTarget.parentElement;
 
     startCenterDrag(e, {
       onStart: () => {},
       onDrag: (clientX, clientY) => {
-        const container = e.currentTarget.parentElement;
         if (!container) return;
         const rect = container.getBoundingClientRect();
 
@@ -58,11 +59,12 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
     e.stopPropagation();
     const initialX = annotation.x;
     const initialY = annotation.y;
+    // Read now: React clears e.currentTarget once this handler returns, before any pointermove
+    const container = e.currentTarget.parentElement?.parentElement;
 
     startResizeDrag(e, {
       onStart: () => {},
       onDrag: (clientX, clientY) => {
-        const container = e.currentTarget.parentElement?.parentElement;
         if (!container) return;
         const rect = container.getBoundingClientRect();
 
@@ -106,15 +108,15 @@ export const CircleAnnotationView: React.FC<CircleAnnotationViewProps> = ({
           onPointerDown={handleResizeDown}
           className="absolute flex items-center justify-center cursor-se-resize z-30"
           style={{
-            right: "-22px",
+            right: "-24px",
             top: "50%",
             transform: "translate(0, -50%)",
-            width: "44px", // Touch target size
-            height: "44px",
+            width: "48px", // Finger-sized touch area
+            height: "48px",
           }}
         >
           {/* Visual dot */}
-          <div className="w-4 h-4 bg-yellow-400 rounded-full border-2 border-white shadow-md active:scale-125 transition-transform" />
+          <div className="w-5 h-5 bg-yellow-400 rounded-full border-2 border-white shadow-md active:scale-125 transition-transform" />
         </div>
       )}
     </div>

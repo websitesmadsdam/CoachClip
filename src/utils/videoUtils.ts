@@ -51,6 +51,23 @@ export function getDisplayedVideoBounds(
 }
 
 /**
+ * Inline style for a video stage shaped like the video itself, so portrait phone video is not
+ * squeezed into a 16:9 box. The stage is as wide as its parent allows but never taller than maxHeight.
+ */
+export function getVideoStageStyle(
+  videoWidth: number,
+  videoHeight: number,
+  maxHeight: string
+): { aspectRatio: string; width: string } {
+  const known = videoWidth > 0 && videoHeight > 0;
+  const ratio = known ? videoWidth / videoHeight : 16 / 9;
+  return {
+    aspectRatio: known ? `${videoWidth} / ${videoHeight}` : "16 / 9",
+    width: `min(100%, calc(${maxHeight} * ${Number(ratio.toFixed(4))}))`,
+  };
+}
+
+/**
  * Clamps a given time to fit within valid bounds.
  */
 export function clampTime(time: number, maxDuration: number, minTime = 0): number {

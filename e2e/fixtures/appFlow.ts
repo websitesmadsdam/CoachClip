@@ -6,11 +6,12 @@
 import { expect, type Page } from "@playwright/test";
 import { TEST_VIDEO } from "./testVideo";
 
-export async function openEditorWithTestVideo(page: Page): Promise<void> {
+export async function openEditorWithTestVideo(page: Page, videoPath: string = TEST_VIDEO.path): Promise<void> {
   await page.goto("/");
-  await page.locator("button:has-text('Nyt analyseklip')").first().click();
+  // The sidebar button is hidden on phones; use whichever one is on screen
+  await page.locator("button:has-text('Nyt analyseklip'):visible").first().click();
   await expect(page.locator("h3:has-text('Vælg kamp- eller træningsvideo')")).toBeVisible();
-  await page.setInputFiles("input[type='file']", TEST_VIDEO.path);
+  await page.setInputFiles("input[type='file']", videoPath);
   await page.locator("button:has-text('Fortsæt til klip-trimning')").click();
   await expect(page.locator("h2:has-text('Find situationen')")).toBeVisible({ timeout: 10_000 });
   await page.locator("button:has-text('Næste: Finjustering')").click();

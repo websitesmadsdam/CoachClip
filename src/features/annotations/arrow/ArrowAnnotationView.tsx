@@ -50,11 +50,12 @@ export const ArrowAnnotationView: React.FC<ArrowAnnotationViewProps> = ({
     const initStartY = annotation.startY;
     const initEndX = annotation.endX;
     const initEndY = annotation.endY;
+    // Read now: React clears e.currentTarget once this handler returns, before any pointermove
+    const container = e.currentTarget.parentElement?.parentElement;
 
     startNodeDrag(e, {
       onStart: () => {},
       onDrag: (clientX, clientY) => {
-        const container = e.currentTarget.parentElement?.parentElement;
         if (!container) return;
         const rect = container.getBoundingClientRect();
 
@@ -139,29 +140,30 @@ export const ArrowAnnotationView: React.FC<ArrowAnnotationViewProps> = ({
           style={{
             left: `${sx}px`,
             top: `${sy}px`,
-            width: "44px", // Big touch area
-            height: "44px",
+            width: "48px", // Finger-sized touch area
+            height: "48px",
             transform: "translate(-50%, -50%)",
           }}
         >
-          <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-md active:scale-125 transition-transform" />
+          <div className="w-5 h-5 bg-green-500 rounded-full border-2 border-white shadow-md active:scale-125 transition-transform" />
         </div>
       )}
 
       {/* Touch-Friendly End Node Handle */}
       {isSelected && onUpdate && (
         <div
+          data-testid="arrow-end-handle"
           onPointerDown={(e) => handlePointerDown(e, "end")}
           className="absolute cursor-move pointer-events-auto flex items-center justify-center z-30"
           style={{
             left: `${ex}px`,
             top: `${ey}px`,
-            width: "44px", // Big touch area
-            height: "44px",
+            width: "48px", // Finger-sized touch area
+            height: "48px",
             transform: "translate(-50%, -50%)",
           }}
         >
-          <div className="w-4 h-4 bg-yellow-400 rounded-full border-2 border-white shadow-md active:scale-125 transition-transform" />
+          <div className="w-5 h-5 bg-yellow-400 rounded-full border-2 border-white shadow-md active:scale-125 transition-transform" />
         </div>
       )}
     </div>

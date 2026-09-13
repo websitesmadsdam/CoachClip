@@ -20,7 +20,7 @@ import { FreezeAnnotationForm } from "./freeze/FreezeAnnotationForm";
 import { useVideoPlayback } from "../../hooks/useVideoPlayback";
 import { useFreezePlayback } from "../../hooks/useFreezePlayback";
 import { useAnnotationSelection } from "../../hooks/useAnnotationSelection";
-import { formatPreciseTime } from "../../utils/videoUtils";
+import { formatPreciseTime, getVideoStageStyle } from "../../utils/videoUtils";
 
 interface AnnotationEditorProps {
   videoUrl: string;
@@ -142,18 +142,18 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   return (
     <div className="flex flex-col h-full bg-slate-900 text-slate-100 overflow-hidden">
       {/* Top Bar Navigation */}
-      <div className="bg-slate-950 border-b border-slate-800 px-6 py-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="bg-slate-950 border-b border-slate-800 px-3 py-3 sm:px-6 sm:py-4 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={onBack}
-            className="p-2 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-850 rounded-xl transition-all cursor-pointer"
+            className="p-2 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-850 rounded-xl transition-all cursor-pointer shrink-0"
             title="Gå tilbage"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-lg font-black tracking-tight text-white">Forklar situationen</h1>
-            <p className="text-xs text-slate-400">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-white">Forklar situationen</h1>
+            <p className="hidden sm:block text-xs text-slate-400">
               Tilføj fokuspunkter, pile, cirkler eller frysepunkter for at forklare din taktik.
             </p>
           </div>
@@ -161,7 +161,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
 
         <button
           onClick={() => onComplete(annotations)}
-          className="bg-brand-clear hover:bg-blue-600 text-white font-black text-xs uppercase tracking-wider py-2.5 px-5 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-blue-500/10 cursor-pointer transition-all"
+          className="bg-brand-clear hover:bg-blue-600 text-white font-black text-[10px] sm:text-xs uppercase tracking-wider py-2.5 px-3 sm:px-5 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-blue-500/10 cursor-pointer transition-all shrink-0"
         >
           <Check className="w-4 h-4" />
           <span>Næste: Gennemse klip</span>
@@ -172,12 +172,13 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         
         {/* Left Side: Video Player Workspace */}
-        <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-8 overflow-y-auto bg-slate-950">
-          
-          {/* Interactive Player Window */}
-          <div 
+        <div className="flex-1 flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4 lg:p-8 overflow-y-auto bg-slate-950">
+
+          {/* Interactive Player Window, shaped like the video (portrait stays tall on phones) */}
+          <div
             ref={containerRef}
-            className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center select-none touch-none"
+            className="relative max-w-4xl bg-black rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center select-none touch-none"
+            style={getVideoStageStyle(videoSize.width, videoSize.height, "60svh")}
           >
             <video
               ref={videoRef}
@@ -271,7 +272,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
           </div>
 
           {/* Control Bar & Playback Timeline */}
-          <div className="w-full max-w-4xl flex items-center justify-between gap-4 mt-4 text-white shrink-0">
+          <div className="w-full max-w-4xl flex flex-wrap items-center justify-between gap-2 sm:gap-4 mt-4 text-white shrink-0">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => seekRelative(-2, endTime)}
@@ -322,7 +323,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
                 const targetTime = startTime + ratio * (endTime - startTime);
                 seekTo(targetTime);
               }}
-              className="flex-1 h-3.5 bg-slate-950 border border-slate-800 rounded-full relative overflow-hidden cursor-pointer"
+              className="order-last w-full sm:order-none sm:w-auto sm:flex-1 h-3.5 bg-slate-950 border border-slate-800 rounded-full relative overflow-hidden cursor-pointer"
             >
               {/* Playback progress cursor indicator */}
               <div

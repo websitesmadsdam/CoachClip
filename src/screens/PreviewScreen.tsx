@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Play, Pause, X, Edit, RotateCcw } from "lucide-react";
 import { CoachClipProject } from "../types";
-import { formatPreciseTime } from "../utils/videoUtils";
+import { formatPreciseTime, getVideoStageStyle } from "../utils/videoUtils";
 import { AnnotationCanvas } from "../features/annotations/AnnotationCanvas";
 
 interface PreviewScreenProps {
@@ -25,6 +25,7 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentTime, setCurrentTime] = useState(project.clip.startTime);
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
   // Sync starting time
   useEffect(() => {
@@ -97,12 +98,17 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
           </button>
         </div>
 
-        {/* Video Sandbox Arena */}
-        <div className="relative aspect-video w-full bg-black flex items-center justify-center">
+        {/* Video Sandbox Arena, shaped like the video */}
+        <div className="w-full bg-black flex justify-center">
+        <div
+          className="relative bg-black flex items-center justify-center"
+          style={getVideoStageStyle(videoSize.width, videoSize.height, "60svh")}
+        >
           <video
             ref={videoRef}
             src={videoUrl}
             className="w-full h-full object-contain pointer-events-none"
+            onLoadedMetadata={(e) => setVideoSize({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight })}
             onTimeUpdate={handleTimeUpdate}
             playsInline
             autoPlay
@@ -113,6 +119,7 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
           <div className="absolute inset-0 z-10 cursor-pointer" onClick={togglePlay} />
 
           <AnnotationCanvas videoRef={videoRef} annotations={project.annotations} time={currentTime} zIndexClassName="z-20" />
+        </div>
         </div>
 
         {/* Video controls bottom bar */}

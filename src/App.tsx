@@ -32,6 +32,7 @@ import { deliverClip } from "./export/deliverClip";
 import { clearExportFiles } from "./export/exportStorage";
 import { AUDIO_WARNING_MESSAGE } from "./export/exportErrors";
 import { hasMatchingSource } from "./utils/projectStatus";
+import { getVideoStageStyle } from "./utils/videoUtils";
 
 // Flag to toggle seeding of demo data
 const ENABLE_DEMO_DATA = false;
@@ -77,6 +78,7 @@ export default function App() {
   const [previewProject, setPreviewProject] = useState<CoachClipProject | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
+  const [reviewVideoSize, setReviewVideoSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
   // The finished clip lives only in memory/OPFS while the success screen is shown
   const [exportedClip, setExportedClip] = useState<ExportedClip | null>(null);
@@ -600,12 +602,17 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Overlays preview area */}
-                <div className="relative aspect-video w-full bg-black flex items-center justify-center">
+                {/* Overlays preview area, shaped like the video */}
+                <div className="w-full bg-black flex justify-center">
+                <div
+                  className="relative bg-black flex items-center justify-center"
+                  style={getVideoStageStyle(reviewVideoSize.width, reviewVideoSize.height, "60svh")}
+                >
                   <video
                     ref={previewVideoRef}
                     src={videoUrl}
                     className="w-full h-full object-contain pointer-events-none"
+                    onLoadedMetadata={(e) => setReviewVideoSize({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight })}
                     onTimeUpdate={() => {
                       const v = previewVideoRef.current;
                       if (!v) return;
@@ -620,6 +627,7 @@ export default function App() {
                   />
 
                   <AnnotationCanvas videoRef={previewVideoRef} annotations={annotations} time={previewCurrentTime} zIndexClassName="z-20" />
+                </div>
                 </div>
 
                 <div className="p-6 bg-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-200">

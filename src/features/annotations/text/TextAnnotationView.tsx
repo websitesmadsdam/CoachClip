@@ -33,11 +33,12 @@ export const TextAnnotationView: React.FC<TextAnnotationViewProps> = ({
     }
     e.stopPropagation();
     if (onSelect) onSelect();
+    // Read now: React clears e.currentTarget once this handler returns, before any pointermove
+    const container = e.currentTarget.parentElement;
 
     startDrag(e, {
       onStart: () => {},
       onDrag: (clientX, clientY) => {
-        const container = e.currentTarget.parentElement;
         if (!container) return;
         const rect = container.getBoundingClientRect();
 
@@ -68,6 +69,7 @@ export const TextAnnotationView: React.FC<TextAnnotationViewProps> = ({
   // An empty draft has nothing to draw, so it shows a visible placeholder instead.
   return (
     <div
+      data-testid="text-annotation"
       onPointerDown={handlePointerDown}
       className={`absolute cursor-move select-none z-20 rounded-lg touch-action-none ${
         isSelected ? "ring-2 ring-blue-400" : ""

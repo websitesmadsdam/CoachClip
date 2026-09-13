@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { getDisplayedVideoBounds } from "./videoUtils";
+import { getDisplayedVideoBounds, getVideoStageStyle } from "./videoUtils";
+
+describe("getVideoStageStyle", () => {
+  it("shapes the stage like a portrait video and caps its height", () => {
+    expect(getVideoStageStyle(360, 640, "60svh")).toEqual({
+      aspectRatio: "360 / 640",
+      width: "min(100%, calc(60svh * 0.5625))",
+    });
+  });
+
+  it("falls back to 16:9 until the video size is known", () => {
+    expect(getVideoStageStyle(0, 0, "60svh")).toEqual({
+      aspectRatio: "16 / 9",
+      width: "min(100%, calc(60svh * 1.7778))",
+    });
+  });
+});
 
 describe("getDisplayedVideoBounds", () => {
   it("pillarboxes a portrait video inside a wider container", () => {
