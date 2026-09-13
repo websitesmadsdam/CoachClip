@@ -154,9 +154,9 @@ Body: ${observation.responseBody}`
     console.log("Clicking 'Afbryd eksport' button...");
     await page.locator("button:has-text('Afbryd eksport')").click();
 
-    // Verify UI updates back to the failure / cancelled screen
-    await expect(page.locator("h3:has-text('Eksporten fejlede')")).toBeVisible();
-    await expect(page.locator("p:has-text('Eksporten blev afbrudt.')")).toBeVisible();
+    // Verify UI shows a neutral cancelled screen, not a failure
+    await expect(page.locator("h3:has-text('Eksporten blev afbrudt')")).toBeVisible();
+    await expect(page.locator("h3:has-text('Eksporten fejlede')")).toHaveCount(0);
 
     // Confirm that the DELETE route was triggered
     expect(deleteFired).toBe(true);

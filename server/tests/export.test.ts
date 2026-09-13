@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { getCircleGeometry, getArrowGeometry, getTextGeometry } from "../../shared/annotationGeometry";
 import { sanitizeExportFileName } from "../../shared/exportSchema";
+import { FfmpegExportService } from "../src/services/ffmpegExportService";
 
 describe("CoachClip Backend MVP - Unit Tests", () => {
   beforeEach(() => {
@@ -417,6 +418,41 @@ describe("CoachClip Backend MVP - Unit Tests", () => {
 
       const finalJob = exportJobService.getJob(jobId);
       expect(finalJob?.status).toBe("expired");
+    });
+  });
+
+  describe("ffprobe Video Metadata Parsing", () => {
+    const probe = (stream: Record<string, unknown> | null, format?: Record<string, unknown>) =>
+      JSON.stringify({ streams: stream ? [stream] : [], format });
+
+    it("should prefer stream duration when present", () => {
+      const meta = FfmpegExportService.parseVideoProbeOutput(
+        probe({ width: 1920, height: 1080, duration: "12.5" }, { duration: "12.6" })
+      );
+      expect(meta).toEqual({ width: 1920, height: 1080, duration: 12.5 });
+    });
+
+    it("should fall back to format duration when stream duration is missing (iPhone MOV)", () => {
+      const meta = FfmpegExportService.parseVideoProbeOutput(
+        probe({ width: 1920, height: 1080 }, { duration: "34.021" })
+      );
+      expect(meta.duration).toBe(34.021);
+    });
+
+    it("should fall back to format duration when stream duration is N/A", () => {
+      const meta = FfmpegExportService.parseVideoProbeOutput(
+        probe({ width: 1280, height: 720, duration: "N/A" }, { duration: "8" })
+      );
+      expect(meta.duration).toBe(8);
+    });
+
+    it("should return zero duration when neither stream nor format has one", () => {
+      const meta = FfmpegExportService.parseVideoProbeOutput(probe({ width: 1280, height: 720 }));
+      expect(meta.duration).toBe(0);
+    });
+
+    it("should throw when there is no video stream", () => {
+      expect(() => FfmpegExportService.parseVideoProbeOutput(probe(null, { duration: "5" }))).toThrow();
     });
   });
 });
