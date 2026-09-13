@@ -70,7 +70,7 @@ const throwIfAborted = (signal: AbortSignal) => {
 
 // Without `strict`/`strictNullChecks` (this project's tsconfig has neither), TS does not narrow
 // `IteratorResult<T, void>` via `!result.done` property checks alone; a user-defined type guard
-// forces the narrowing without weakening the type (see task-8-report.md, Step 5 deviation).
+// forces the narrowing without weakening the type.
 function hasValue<T>(result: IteratorResult<T, void>): result is IteratorYieldResult<T> {
   return !result.done;
 }
@@ -105,9 +105,8 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
   const onVisibility = () => {
     if (document.hidden) wasHidden = true;
   };
-  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
 
-  const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(file) });
+  let input: Input | null = null;
   let wakeLock: WakeLockSentinel | null = null;
   let sink: ExportSink | null = null;
   let output: Output | null = null;
@@ -115,6 +114,9 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
 
   try {
     onProgress({ stage: "preparing", fraction: 0 });
+
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
+    input = new Input({ formats: ALL_FORMATS, source: new BlobSource(file) });
     wakeLock = (await navigator.wakeLock?.request("screen").catch(() => null)) ?? null;
 
     const videoTrack = await input.getPrimaryVideoTrack().catch(() => null);
@@ -255,7 +257,7 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
     throw exportError;
   } finally {
     closeDecodedAudio(audio);
-    input.dispose();
+    input?.dispose();
     await wakeLock?.release().catch(() => {});
     if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
   }
