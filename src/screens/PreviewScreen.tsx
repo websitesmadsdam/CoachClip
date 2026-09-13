@@ -85,7 +85,7 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
             </h4>
             <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-bold">
               {project.category || "Ingen kategori"} •{" "}
-              {project.feedbackType === "positive" ? "✓ Positvt eksempel" : "⚠ Udviklingspunkt"}
+              {project.feedbackType === "positive" ? "✓ Positivt eksempel" : "⚠ Udviklingspunkt"}
             </p>
           </div>
           <button

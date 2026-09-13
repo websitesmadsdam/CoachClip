@@ -80,7 +80,8 @@ visuelle overgange, offline-brug. Foreslå det ikke som "forbedringer".
 ## Åbne punkter
 
 - **iPhone-tjekliste før udrulning:** 4K lodret eksport (hastighed), HEVC-video, skærm slukket
-  midt i eksport, Gem i Fotos via delemenuen.
+  midt i eksport, Gem i Fotos via delemenuen, markeringer i lodret video står samme sted i
+  editor, gennemse og afspilning.
 - **Skærm slukket kan få eksporten til at hænge** i stedet for at fejle med `INTERRUPTED`
   (iOS kan pause encoderen). En watchdog er ikke lavet.
 - **Lydkodning der fejler** (usædvanlig samplerate) giver `UNKNOWN` i stedet for et klip uden lyd.
@@ -88,6 +89,8 @@ visuelle overgange, offline-brug. Foreslå det ikke som "forbedringer".
 - **Afkodningsfejl midt i videoen** (fx HEVC) giver `UNKNOWN`, ikke `UNREADABLE_VIDEO`.
 - **iOS 17–18** kan virke, men er ikke understøttet eller testet.
 - **PWA-ikonerne** i `public/manifest.json` peger på Unsplash og blokeres af CSP'en.
+- **Flere faner:** åbnes CoachClip i en ny fane, sletter oprydningen ved app-start også et
+  færdigt klip, som en anden fane viser på succes-siden.
 
 ## Windows-noter
 

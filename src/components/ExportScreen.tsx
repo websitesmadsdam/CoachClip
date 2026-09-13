@@ -12,7 +12,6 @@ import { detectExportCapabilities } from "../export/capabilities";
 import { clearExportFiles } from "../export/exportStorage";
 
 const MISSING_SOURCE_MESSAGE = "Kildevideoen blev ikke fundet. Vælg eller genforbind din videofil for at eksportere.";
-const CANCELLED_BY_USER = "Afbrudt af bruger.";
 
 type ScreenState =
   | { kind: "checking" }
@@ -25,7 +24,7 @@ interface ExportScreenProps {
   project: CoachClipProject;
   sourceFile: File | null;
   onExportSuccess: (clip: ExportedClip) => void;
-  onExportFailed: (errorMsg?: string) => void;
+  onExportFailed: () => void;
 }
 
 function stageText(progress: ExportProgress): string {
@@ -96,7 +95,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({ project, sourceFile,
         <h3 className="text-xl font-extrabold text-slate-900 mb-2">Browseren kan ikke lave klip</h3>
         <p className="text-xs text-slate-500 mb-6 leading-relaxed font-medium">{EXPORT_ERROR_MESSAGES.UNSUPPORTED_BROWSER}</p>
         <button
-          onClick={() => onExportFailed(CANCELLED_BY_USER)}
+          onClick={() => onExportFailed()}
           className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
         >
           Gå tilbage
@@ -107,6 +106,8 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({ project, sourceFile,
 
   if (state.kind === "failed" || state.kind === "cancelled") {
     const isCancelled = state.kind === "cancelled";
+    // A missing source file cannot be fixed by retrying the same export attempt.
+    const isMissingSource = state.kind === "failed" && state.message === MISSING_SOURCE_MESSAGE;
     return (
       <div className="w-full max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 text-center animate-scale-up">
         {isCancelled ? (
@@ -126,17 +127,19 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({ project, sourceFile,
         </p>
         <div className="flex gap-2.5">
           <button
-            onClick={() => onExportFailed(state.kind === "cancelled" ? CANCELLED_BY_USER : state.message)}
+            onClick={() => onExportFailed()}
             className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
           >
             Gå tilbage
           </button>
-          <button
-            onClick={() => setAttempt((value) => value + 1)}
-            className="flex-1 py-3 bg-brand-clear hover:bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer transition-all"
-          >
-            Prøv igen
-          </button>
+          {!isMissingSource && (
+            <button
+              onClick={() => setAttempt((value) => value + 1)}
+              className="flex-1 py-3 bg-brand-clear hover:bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer transition-all"
+            >
+              Prøv igen
+            </button>
+          )}
         </div>
       </div>
     );

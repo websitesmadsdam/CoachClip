@@ -223,7 +223,7 @@ export default function App() {
     setVideoUrl(url);
   };
 
-  // Handle local video upload/parsing
+  // Handle the picked video file
   const handleVideoFile = (file: File) => {
     if (!file.type.startsWith("video/")) {
       alert("Videoformatet understøttes ikke endnu. Vælg en MP4- eller MOV-video.");
@@ -416,10 +416,16 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
 
-    await dbService.saveProject(finished);
+    try {
+      await dbService.saveProject(finished);
+      await loadProjectsData();
+    } catch (error) {
+      console.error("Failed to save the finished export to the project database:", error);
+    }
+
+    // The clip file is what matters; the "Eksporteret" badge is cosmetic and can lag.
     setActiveProject(finished);
     setExportedClip(clip);
-    await loadProjectsData();
     setEditorStep("success");
   };
 
@@ -658,7 +664,7 @@ export default function App() {
               />
             )}
 
-            {/* Screen 8: Simulated Export Loader */}
+            {/* Screen 8: Export in the browser */}
             {editorStep === "exporting" && activeProject && (
               <ExportScreen
                 project={activeProject}
@@ -685,7 +691,7 @@ export default function App() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-bold uppercase tracking-wider text-[9px]">Varighed:</span>
-                    <span className="text-slate-800 font-extrabold">{exportedClip.durationSec.toFixed(1)} sekunder</span>
+                    <span className="text-slate-800 font-extrabold">{exportedClip.durationSec.toFixed(1).replace(".", ",")} sekunder</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-bold uppercase tracking-wider text-[9px]">Format / Opløsning:</span>
@@ -888,7 +894,7 @@ export default function App() {
             </div>
             <h3 className="text-lg font-black text-slate-800 mb-1">Video kan ikke findes</h3>
             <p className="text-xs text-slate-500 mb-5 leading-relaxed font-medium">
-              For at beskytte dit lager gemmer CoachClip ikke tunge rå-videoer i skyen.<br />
+              CoachClip gemmer aldrig selve videoen på enheden.<br />
               Vælg filen <strong className="text-slate-800">"{projectToRestore.sourceVideo.fileName}"</strong> igen for at fortsætte.
             </p>
 

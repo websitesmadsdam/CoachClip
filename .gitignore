@@ -1,8 +1,5 @@
 node_modules/
 dist/
-tmp/
-uploads/
-outputs/
 test-results/
 playwright-report/
 coverage/

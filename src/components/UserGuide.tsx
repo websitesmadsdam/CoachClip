@@ -33,7 +33,7 @@ export const UserGuide: React.FC = () => {
       num: 1,
       icon: Video,
       title: "1. Vælg din video",
-      desc: "Upload en kamp- eller træningsvideo fra din enhed. CoachClip understøtter alle gængse format som MP4 og MOV.",
+      desc: "Vælg en kamp- eller træningsvideo fra din enhed. CoachClip understøtter alle gængse formater som MP4 og MOV.",
       color: "bg-blue-500/10 text-blue-600 border-blue-200"
     },
     {
@@ -74,7 +74,7 @@ export const UserGuide: React.FC = () => {
     },
     {
       q: "Hvorfor beder CoachClip mig om at 'Vælg videofil igen'?",
-      a: "Hvis browserens midlertidige hukommelsessti udløber (f.eks. efter genstart af din telefon eller browser), beder CoachClip dig om at pege på den samme videofil igen. Når du gør det, genindlæses alle dine markeringer og tidskoder automatisk uden tab af data!"
+      a: "CoachClip gemmer aldrig selve videoen. Når du åbner et gemt projekt efter at have genindlæst siden, eller et projekt fra en anden video, skal du vælge den samme videofil igen. Alle dine markeringer og tidskoder er gemt og kommer automatisk tilbage."
     },
     {
       q: "Kan jeg bruge CoachClip uden internet?",

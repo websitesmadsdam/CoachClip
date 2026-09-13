@@ -56,8 +56,8 @@ test.describe("CoachClip - Full E2E Export Flow", () => {
     await expect(page.locator("h3:has-text('Dit klip er klar!')")).toBeVisible({ timeout: 90_000 });
 
     // The success screen shows the planned length (clip + 3 s freeze); the file must match it
-    const durationText = await page.getByText(/^\d+\.\d sekunder$/).textContent();
-    const shownDuration = parseFloat(durationText ?? "");
+    const durationText = await page.getByText(/^\d+,\d sekunder$/).textContent();
+    const shownDuration = parseFloat((durationText ?? "").replace(",", "."));
     expect(shownDuration).toBeGreaterThan(3);
     await expect(page.getByText(`MP4 / ${TEST_VIDEO.width}×${TEST_VIDEO.height}`)).toBeVisible();
 
