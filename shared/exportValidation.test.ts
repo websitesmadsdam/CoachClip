@@ -100,4 +100,13 @@ describe("validateExport – annotations", () => {
     const unknown = { id: "u", type: "banana" } as unknown as Annotation;
     expect(validateExport({ ...base, annotations: [unknown] }).code).toBe("INVALID_TYPE");
   });
+
+  it("rejects an annotation without a type with the server's message", () => {
+    const untyped = { id: "u" } as unknown as Annotation;
+    expect(validateExport({ ...base, annotations: [untyped] })).toEqual({
+      valid: false,
+      code: "INVALID_TYPE",
+      message: "En annotation mangler en type.",
+    });
+  });
 });

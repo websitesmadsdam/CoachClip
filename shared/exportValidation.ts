@@ -100,6 +100,9 @@ export function validateExport({ clip, sourceDuration, annotations }: ExportVali
     a.startTime < 0 || a.endTime < a.startTime || a.startTime > clip.endTime || a.endTime < clip.startTime;
 
   for (const a of annotations) {
+    if (!a?.type) {
+      return fail("INVALID_TYPE", "En annotation mangler en type.");
+    }
     switch (a?.type) {
       case "text":
         texts++;
