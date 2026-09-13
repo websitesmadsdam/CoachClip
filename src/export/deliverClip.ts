@@ -32,7 +32,8 @@ export async function deliverClip(
       return "shared";
     } catch (error) {
       if ((error as { name?: string })?.name === "AbortError") return "dismissed";
-      throw error;
+      // For example NotAllowedError when the user gesture expired: the coach still gets the file.
+      console.warn("Sharing the clip failed, downloading instead:", error);
     }
   }
   return download(clip.file, clip.fileName);

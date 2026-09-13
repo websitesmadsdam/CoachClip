@@ -3,16 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export const ARROW_GEOMETRY = {
-  strokeWidth: 6,
-  minLength: 10,
-  colors: {
-    yellow: "#FFB020",
-    red: "#D64545",
-    white: "#FFFFFF",
-  },
-};
-
 export const TEXT_GEOMETRY = {
   fontSizes: {
     small: 0.03, // fraction of height
@@ -24,15 +14,6 @@ export const TEXT_GEOMETRY = {
   lineHeightFactor: 1.25,
   maxCharsPerLine: 22,
   bgColor: "rgba(0, 0, 0, 0.82)",
-};
-
-export const CIRCLE_GEOMETRY = {
-  colors: {
-    yellow: "#FFB020",
-    red: "#D64545",
-    white: "#FFFFFF",
-  },
-  bgOpacity: 0.08,
 };
 
 export function getCircleGeometry(videoWidth: number, videoHeight: number, radius: number) {
@@ -68,47 +49,11 @@ export function getArrowGeometry(
     x2,
     y2,
     length,
-    strokeWidth: ARROW_GEOMETRY.strokeWidth,
+    strokeWidth: ANNOTATION_STYLE.arrowStroke,
   };
 }
 
-export function getTextGeometry(
-  videoWidth: number,
-  videoHeight: number,
-  x: number,
-  y: number,
-  size: "small" | "normal" | "large" | string,
-  text: string
-) {
-  const sizeKey = size in TEXT_GEOMETRY.fontSizes ? (size as "small" | "normal" | "large") : "normal";
-  const fontSize = TEXT_GEOMETRY.fontSizes[sizeKey] * videoHeight;
-  const charWidth = fontSize * 0.52;
-  const paddingX = fontSize * TEXT_GEOMETRY.paddingXFactor;
-  const paddingY = fontSize * TEXT_GEOMETRY.paddingYFactor;
-
-  // Split lines
-  const lines = wrapTextLines(text);
-
-  const maxLineLength = Math.max(...lines.map((l) => l.length), 0);
-  const boxWidth = maxLineLength * charWidth + paddingX * 2;
-  const boxHeight = lines.length * fontSize * TEXT_GEOMETRY.lineHeightFactor + paddingY * 2;
-
-  const rectX = x * videoWidth - boxWidth / 2;
-  const rectY = y * videoHeight - boxHeight / 2;
-
-  return {
-    rectX,
-    rectY,
-    boxWidth,
-    boxHeight,
-    fontSize,
-    paddingX,
-    paddingY,
-    lines,
-  };
-}
-
-// ---- Canvas rendering geometry (shared by browser preview and browser export) ----
+// ---- Canvas rendering geometry (shared by canvas preview and browser export) ----
 
 export const ANNOTATION_COLORS = {
   yellow: "#FFB020",

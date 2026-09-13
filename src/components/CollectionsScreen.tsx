@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
-import { 
-  FolderHeart, Plus, Trash2, ArrowUp, ArrowDown, Play, 
+import React, { useState, useEffect } from "react";
+import {
+  FolderHeart, Plus, Trash2, ArrowUp, ArrowDown,
   Video, ChevronRight, X, FolderPlus, Clock, Film
 } from "lucide-react";
-import { Collection, CoachClipProject, BRAND_COLORS, ArrowAnnotation, CircleAnnotation, TextAnnotation } from "../types";
+import { Collection, CoachClipProject } from "../types";
 import { dbService } from "../db";
 
 interface CollectionsScreenProps {
@@ -26,14 +26,6 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = (props) => {
   // Create Modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-
-  // Playback Playlist Modal
-  const [playlistPlaying, setPlaylistPlaying] = useState<boolean>(false);
-  const [playlistProjects, setPlaylistProjects] = useState<CoachClipProject[]>([]);
-  const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState<number>(0);
-  const [playlistVideoUrl, setPlaylistVideoUrl] = useState<string>("");
-  const playlistVideoRef = useRef<HTMLVideoElement>(null);
-  const [playlistCurrentTime, setPlaylistCurrentTime] = useState<number>(0);
 
   // Load collections
   const loadCollections = async () => {
@@ -139,70 +131,6 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = (props) => {
     return Math.round(sec);
   };
 
-  // Playback Playlist logic
-  const startPlaylist = (col: Collection) => {
-    const colProjects = getCollectionProjects(col);
-    if (colProjects.length === 0) {
-      alert("Tilføj venligst nogle klip til samlingen først!");
-      return;
-    }
-    setPlaylistProjects(colProjects);
-    setCurrentPlaylistIndex(0);
-    setPlaylistPlaying(true);
-    setPlaylistCurrentTime(0);
-  };
-
-  const activePlaylistProject = playlistProjects[currentPlaylistIndex];
-
-  // Load video source for playlist item
-  useEffect(() => {
-    if (!activePlaylistProject) return;
-
-    // We can search for the local file or mock/simulated url
-    // In our prototype, if we don't have a direct file blob, we use a nice sample soccer video so that clicking play actually performs beautifully
-    let videoUrl = "https://assets.mixkit.co/videos/preview/mixkit-player-jumping-in-a-basketball-game-34283-large.mp4"; // beautiful high contrast fallback
-    if (activePlaylistProject.exportedVideoUrl) {
-      videoUrl = activePlaylistProject.exportedVideoUrl;
-    }
-
-    setPlaylistVideoUrl(videoUrl);
-    setPlaylistCurrentTime(activePlaylistProject.clip.startTime);
-
-    if (playlistVideoRef.current) {
-      playlistVideoRef.current.currentTime = activePlaylistProject.clip.startTime;
-      playlistVideoRef.current.play().catch(() => {});
-    }
-  }, [currentPlaylistIndex, activePlaylistProject]);
-
-  const handlePlaylistTimeUpdate = () => {
-    const video = playlistVideoRef.current;
-    if (!video || !activePlaylistProject) return;
-
-    const t = video.currentTime;
-    setPlaylistCurrentTime(t);
-
-    if (t >= activePlaylistProject.clip.endTime) {
-      // Move to next clip or end playlist
-      if (currentPlaylistIndex < playlistProjects.length - 1) {
-        setCurrentPlaylistIndex(prev => prev + 1);
-      } else {
-        // End of playlist
-        setPlaylistPlaying(false);
-        alert("Samlingen er færdigafspillet!");
-      }
-    }
-  };
-
-  // Check which annotations are active in current playlist video
-  const getActivePlaylistAnnotations = () => {
-    if (!activePlaylistProject) return [];
-    return activePlaylistProject.annotations.filter(a => {
-      if (a.type === "freeze") return false; // simple skip freeze in slideshow for now, or just display
-      return playlistCurrentTime >= a.startTime && playlistCurrentTime <= a.endTime;
-    });
-  };
-
-  const activePlaylistAnnos = getActivePlaylistAnnotations();
   const activeCol = collections.find(c => c.id === activeCollectionId);
 
   return (
@@ -308,14 +236,6 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = (props) => {
                     Sidst ændret: <span className="font-semibold text-slate-600">{new Date(activeCol.updatedAt).toLocaleDateString("da-DK")}</span>
                   </p>
                 </div>
-
-                <button
-                  onClick={() => startPlaylist(activeCol)}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-brand-success hover:bg-green-700 text-white rounded-xl text-sm font-bold shadow-md shadow-brand-success/15 cursor-pointer active:scale-95 transition-all"
-                >
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Afspil samling</span>
-                </button>
               </div>
 
               {/* Clips List */}
@@ -416,7 +336,7 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = (props) => {
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-400">
               <FolderHeart className="w-12 h-12 mb-3 text-slate-300 opacity-60" />
               <p className="text-base font-bold text-slate-700">Vælg en samling i menuen til venstre</p>
-              <p className="text-xs mt-1">Her kan du sammensætte klip, ændre rækkefølge og afspille dem som et taktikmøde.</p>
+              <p className="text-xs mt-1">Her kan du sammensætte klip og ændre rækkefølgen til et taktikmøde.</p>
             </div>
           )}
         </div>
@@ -471,133 +391,6 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = (props) => {
               </button>
             </div>
           </form>
-        </div>
-      )}
-
-      {/* PLAYLIST IMMERSIVE PLAYBACK VIEWER */}
-      {playlistPlaying && activePlaylistProject && (
-        <div className="fixed inset-0 bg-black z-[100] flex flex-col text-white animate-fade-in select-none">
-          {/* Header */}
-          <div className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="px-2.5 py-1 bg-brand-clear text-xs font-black rounded-md">
-                Klip {currentPlaylistIndex + 1} af {playlistProjects.length}
-              </div>
-              <div>
-                <h4 className="font-extrabold text-sm truncate max-w-[200px] sm:max-w-xs">{activePlaylistProject.title}</h4>
-                <p className="text-[10px] text-zinc-400 mt-0.5 capitalize">{activePlaylistProject.feedbackType === "positive" ? "✓ Det gør vi godt" : "⚠ Det skal vi udvikle"}</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setPlaylistPlaying(false)}
-              className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-white cursor-pointer"
-              title="Luk playliste"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Central Immersive Player Stage */}
-          <div className="flex-1 flex items-center justify-center p-4 relative bg-black">
-            <div className="relative w-full max-w-4xl aspect-video bg-zinc-950 rounded-xl overflow-hidden shadow-2xl">
-              <video
-                ref={playlistVideoRef}
-                src={playlistVideoUrl}
-                className="w-full h-full object-cover"
-                onTimeUpdate={handlePlaylistTimeUpdate}
-                playsInline
-                autoPlay
-              />
-
-              {/* Annotation Overlay */}
-              <div className="absolute inset-0 pointer-events-none">
-                <svg className="w-full h-full absolute inset-0">
-                  <defs>
-                    <marker id="arrow-pl-yellow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                      <path d="M 0 1 L 10 5 L 0 9 z" fill={BRAND_COLORS.accent} />
-                    </marker>
-                    <marker id="arrow-pl-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                      <path d="M 0 1 L 10 5 L 0 9 z" fill={BRAND_COLORS.error} />
-                    </marker>
-                    <marker id="arrow-pl-white" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#FFFFFF" />
-                    </marker>
-                  </defs>
-
-                  {/* Playback arrows */}
-                  {activePlaylistAnnos.filter(a => a.type === "arrow").map((arrow: ArrowAnnotation) => (
-                    <line
-                      key={arrow.id}
-                      x1={`${arrow.startX * 100}%`}
-                      y1={`${arrow.startY * 100}%`}
-                      x2={`${arrow.endX * 100}%`}
-                      y2={`${arrow.endY * 100}%`}
-                      stroke={arrow.color === "yellow" ? BRAND_COLORS.accent : arrow.color === "red" ? BRAND_COLORS.error : "#FFFFFF"}
-                      strokeWidth="4"
-                      markerEnd={`url(#arrow-pl-${arrow.color})`}
-                    />
-                  ))}
-                </svg>
-
-                {/* Playback circles */}
-                {activePlaylistAnnos.filter(a => a.type === "circle").map((circle: CircleAnnotation) => (
-                  <div
-                    key={circle.id}
-                    className="absolute rounded-full border-4"
-                    style={{
-                      left: `${circle.x * 100}%`,
-                      top: `${circle.y * 100}%`,
-                      width: `${circle.radius * 200}%`,
-                      height: `${circle.radius * 200}%`,
-                      transform: "translate(-50%, -50%)",
-                      borderColor: circle.color === "yellow" ? BRAND_COLORS.accent : circle.color === "red" ? BRAND_COLORS.error : "#FFFFFF",
-                      borderStyle: circle.thickness === "bold" ? "solid" : "dashed",
-                    }}
-                  />
-                ))}
-
-                {/* Playback texts */}
-                {activePlaylistAnnos.filter(a => a.type === "text").map((text: TextAnnotation) => (
-                  <div
-                    key={text.id}
-                    className="absolute px-3 py-1.5 rounded-lg text-white font-semibold text-center bg-black/70 shadow-lg"
-                    style={{
-                      left: `${text.x * 100}%`,
-                      top: `${text.y * 100}%`,
-                      transform: "translate(-50%, -50%)",
-                      fontSize: text.size === "small" ? "12px" : text.size === "large" ? "18px" : "15px",
-                    }}
-                  >
-                    {text.text}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Controls */}
-          <div className="bg-zinc-900 border-t border-zinc-800 p-4 shrink-0 flex items-center justify-between">
-            <button
-              disabled={currentPlaylistIndex === 0}
-              onClick={() => setCurrentPlaylistIndex(prev => prev - 1)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm font-bold rounded-lg disabled:opacity-30 cursor-pointer"
-            >
-              Forrige klip
-            </button>
-
-            <div className="text-xs text-zinc-400 font-mono">
-              Spiller: {(playlistCurrentTime - activePlaylistProject.clip.startTime).toFixed(1)}s / {(activePlaylistProject.clip.endTime - activePlaylistProject.clip.startTime).toFixed(1)}s
-            </div>
-
-            <button
-              disabled={currentPlaylistIndex === playlistProjects.length - 1}
-              onClick={() => setCurrentPlaylistIndex(prev => prev + 1)}
-              className="px-4 py-2 bg-brand-clear hover:bg-blue-600 text-sm font-bold rounded-lg disabled:opacity-30 cursor-pointer"
-            >
-              Næste klip
-            </button>
-          </div>
         </div>
       )}
     </div>

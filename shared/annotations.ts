@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Single source of annotation types for browser preview and FFmpeg render.
-// Export job status/stage types live in ./exportJob.ts.
+// Single source of annotation types for the editor, the canvas preview and the browser export.
 
 export type Annotation =
   | TextAnnotation

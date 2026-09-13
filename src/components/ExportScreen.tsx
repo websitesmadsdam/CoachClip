@@ -1,267 +1,113 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * Documented exceptions: Export screen handles complex network event errors using raw any and ignored parameters.
  */
 
-import React, { useState, useEffect, useRef } from "react";
-import { Loader2, CheckCircle2, AlertTriangle, ShieldAlert, X } from "lucide-react";
-import { CoachClipProject, ExportStatus } from "../types";
-import { EXPORT_POLL_INTERVAL_MS, ExportJobResponse, ExportJobStage, ExportJobStatus } from "../../shared/exportJob";
+import React, { useEffect, useRef, useState } from "react";
+import { Loader2, AlertTriangle, X } from "lucide-react";
+import { CoachClipProject } from "../types";
+import { exportClip, EXPORT_STAGE_LABELS, type ExportedClip, type ExportProgress } from "../export/exportClip";
+import { ExportError, EXPORT_ERROR_MESSAGES } from "../export/exportErrors";
+import { detectExportCapabilities } from "../export/capabilities";
+import { clearExportFiles } from "../export/exportStorage";
 
-const STAGE_LABELS: Record<ExportJobStage, string> = {
-  waiting: "Sat i kø...",
-  validating: "Kontrollerer video...",
-  trimming: "Klipper situation...",
-  rendering_annotations: "Tilføjer markeringer...",
-  rendering_freezes: "Tilføjer frysebillede...",
-  concatenating: "Samler klippet...",
-  encoding: "Opretter MP4...",
-  finalizing: "Gør klar...",
-  completed: "Gør klar...",
-};
+const MISSING_SOURCE_MESSAGE = "Kildevideoen blev ikke fundet. Vælg eller genforbind din videofil for at eksportere.";
 
-// The persisted project status says "exported" where the server job says "completed"
-function toProjectExportStatus(jobStatus: ExportJobStatus): ExportStatus {
-  return jobStatus === "completed" ? "exported" : jobStatus;
-}
+type ScreenState =
+  | { kind: "checking" }
+  | { kind: "unsupported" }
+  | { kind: "running"; progress: ExportProgress }
+  | { kind: "failed"; message: string }
+  | { kind: "cancelled" };
 
 interface ExportScreenProps {
   project: CoachClipProject;
   sourceFile: File | null;
-  onExportSuccess: (exportResult: NonNullable<CoachClipProject["export"]>) => void;
-  onExportFailed: (errorMsg?: string) => void;
+  onExportSuccess: (clip: ExportedClip) => void;
+  onExportFailed: () => void;
 }
 
-export const ExportScreen: React.FC<ExportScreenProps> = ({
-  project,
-  sourceFile,
-  onExportSuccess,
-  onExportFailed,
-}) => {
-  const [status, setStatus] = useState<ExportStatus>("not_exported");
-  const [stage, setStage] = useState<string>("");
-  const [progress, setProgress] = useState<number>(0);
-  const [errorMsg, setErrorMsg] = useState<string>("");
-  const [showPrivacyConfirm, setShowPrivacyConfirm] = useState<boolean>(true);
+function stageText(progress: ExportProgress): string {
+  const label = EXPORT_STAGE_LABELS[progress.stage];
+  return progress.stage === "rendering" ? `${label} ${Math.round(progress.fraction * 100)} %` : label;
+}
 
-  const xhrRef = useRef<XMLHttpRequest | null>(null);
-  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const currentJobIdRef = useRef<string | null>(null);
+export const ExportScreen: React.FC<ExportScreenProps> = ({ project, sourceFile, onExportSuccess, onExportFailed }) => {
+  const [state, setState] = useState<ScreenState>({ kind: "checking" });
+  const [attempt, setAttempt] = useState(0);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  // Clean up timers/requests on unmount
   useEffect(() => {
-    return () => {
-      if (xhrRef.current) {
-        xhrRef.current.abort();
-      }
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-      }
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    let active = true;
+    const update = (next: ScreenState) => {
+      if (active) setState(next);
     };
-  }, []);
 
-  const startRealExport = async () => {
-    setShowPrivacyConfirm(false);
-    setStatus("uploading");
-    setStage("Uploader video...");
-    setProgress(0);
-
-    try {
-      let fileToUpload: File | Blob;
-
-      if (sourceFile && sourceFile.size > 0) {
-        fileToUpload = sourceFile;
-      } else {
-        throw new Error("Kildevideoen blev ikke fundet. Vælg eller genforbind din videofil for at eksportere.");
+    (async () => {
+      if (!sourceFile || sourceFile.size === 0) {
+        update({ kind: "failed", message: MISSING_SOURCE_MESSAGE });
+        return;
       }
-
-      // Compile ExportRequestMetadata
-      const metadata = {
-        projectId: project.id,
-        projectTitle: project.title,
-        clip: {
-          startTime: project.clip.startTime,
-          endTime: project.clip.endTime,
-        },
-        sourceVideo: {
-          fileName: sourceFile.name,
-          duration: project.sourceVideo.duration,
-          width: project.sourceVideo.width,
-          height: project.sourceVideo.height,
-        },
-        annotations: project.annotations,
-        output: {
-          maxWidth: 1920,
-          maxHeight: 1080,
-          format: "mp4",
-        },
-      };
-
-      const formData = new FormData();
-      formData.append("video", fileToUpload);
-      formData.append("metadata", JSON.stringify(metadata));
-
-      // Use XMLHttpRequest to report real upload progress & support abort
-      const xhr = new XMLHttpRequest();
-      xhrRef.current = xhr;
-
-      xhr.upload.addEventListener("progress", (event) => {
-        if (event.lengthComputable) {
-          const percent = Math.round((event.loaded / event.total) * 100);
-          setProgress(percent);
-        }
-      });
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            const jobId = response.jobId;
-            currentJobIdRef.current = jobId;
-            setStatus("queued");
-            setStage("Sat i kø...");
-            startPolling(jobId);
-          } catch (e) {
-            handleFailure("Kunne ikke behandle serverens svar.");
-          }
-        } else {
-          try {
-            const errRes = JSON.parse(xhr.responseText);
-            handleFailure(errRes.message || `Upload fejlede med status ${xhr.status}`);
-          } catch (e) {
-            handleFailure(`Upload fejlede med status ${xhr.status}`);
-          }
-        }
-      });
-
-      xhr.addEventListener("error", () => {
-        handleFailure("CoachClip kunne ikke kontakte eksportserveren. Kontrollér din forbindelse, og prøv igen.");
-      });
-
-      xhr.addEventListener("abort", () => {
-        setStatus("cancelled");
-      });
-
-      xhr.open("POST", "/api/exports");
-      xhr.send(formData);
-    } catch (err: any) {
-      handleFailure("Der opstod en uventet fejl under upload.");
-    }
-  };
-
-  const startPolling = (jobId: string) => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-    }
-
-    pollTimerRef.current = setInterval(async () => {
+      update({ kind: "checking" });
+      const capabilities = await detectExportCapabilities();
+      if (!active) return;
+      if (!capabilities.supported) {
+        update({ kind: "unsupported" });
+        return;
+      }
+      // The coach may already have pressed "Afbryd eksport" while the browser was being checked
+      if (controller.signal.aborted) {
+        update({ kind: "cancelled" });
+        return;
+      }
+      update({ kind: "running", progress: { stage: "preparing", fraction: 0 } });
+      await clearExportFiles();
       try {
-        const response = await fetch(`/api/exports/${jobId}`);
-        if (!response.ok) {
-          throw new Error(`Server status ${response.status}`);
-        }
-        const job: ExportJobResponse = await response.json();
-
-        // Update local status & progress
-        setStatus(toProjectExportStatus(job.status));
-        setProgress(job.progress || 0);
-
-        if (job.stage) {
-          setStage(STAGE_LABELS[job.stage]);
-        } else if (job.status === "processing") {
-          setStage("Behandler video...");
-        }
-
-        if (job.status === "completed" && job.output) {
-          clearInterval(pollTimerRef.current!);
-          onExportSuccess({
-            jobId,
-            status: "exported",
-            fileName: job.output.fileName,
-            fileSize: job.output.size,
-            duration: job.output.duration,
-            downloadUrl: job.output.downloadUrl,
-            expiresAt: job.output.expiresAt,
-          });
-        } else if (job.status === "failed") {
-          clearInterval(pollTimerRef.current!);
-          handleFailure(job.userMessage || "Klippet kunne ikke oprettes. Projektet og dine markeringer er stadig gemt.");
-        } else if (job.status === "cancelled") {
-          clearInterval(pollTimerRef.current!);
-          setStatus("cancelled");
-        }
-      } catch (err) {
-        // Tolerates brief connection drops, but if persistent, alert
-        console.error("Polling error:", err);
+        const clip = await exportClip({
+          file: sourceFile,
+          project,
+          signal: controller.signal,
+          onProgress: (progress) => update({ kind: "running", progress }),
+        });
+        if (active) onExportSuccess(clip);
+      } catch (error) {
+        const exportError = error instanceof ExportError ? error : new ExportError("UNKNOWN", { cause: error });
+        update(exportError.code === "CANCELLED" ? { kind: "cancelled" } : { kind: "failed", message: exportError.message });
       }
-    }, EXPORT_POLL_INTERVAL_MS);
-  };
+    })();
 
-  const handleFailure = (msg: string) => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-    }
-    setErrorMsg(msg);
-    setStatus("failed");
-  };
+    return () => {
+      active = false;
+      controller.abort();
+    };
+    // The project and source file are fixed while this screen is shown; "Prøv igen" bumps `attempt`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt]);
 
-  const handleCancel = async () => {
-    if (xhrRef.current) {
-      xhrRef.current.abort();
-    }
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-    }
-
-    const jobId = currentJobIdRef.current;
-    if (jobId) {
-      try {
-        await fetch(`/api/exports/${jobId}`, { method: "DELETE" });
-      } catch (e) {
-        console.error("Failed to cancel job on server:", e);
-      }
-    }
-
-    setErrorMsg("");
-    setStatus("cancelled");
-  };
-
-  // Privacy Confirmation Dialog (Section 9!)
-  if (showPrivacyConfirm) {
+  if (state.kind === "unsupported") {
     return (
-      <div className="w-full max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 animate-scale-up text-center">
-        <div className="w-16 h-16 bg-blue-50 text-brand-clear rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100">
-          <ShieldAlert className="w-8 h-8" />
+      <div className="w-full max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 text-center animate-scale-up">
+        <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-100">
+          <AlertTriangle className="w-8 h-8" />
         </div>
-        <h3 className="text-xl font-extrabold text-brand-dark mb-3">Beskyttelse af dine videoer</h3>
-        
-        <p className="text-xs text-slate-500 leading-relaxed mb-6 font-medium">
-          Videoen sendes midlertidigt til CoachClip for at oprette dit klip. Videoen og den færdige fil slettes automatisk efter behandlingen. Vi gemmer ikke dine data permanent.
-        </p>
-
-        <div className="flex flex-col gap-2.5">
-          <button
-            onClick={startRealExport}
-            className="w-full py-3.5 bg-brand-clear hover:bg-blue-600 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow cursor-pointer transition-all"
-          >
-            Fortsæt og eksporter
-          </button>
-          <button
-            onClick={() => onExportFailed("Afbrudt af bruger.")}
-            className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
-          >
-            Gå tilbage
-          </button>
-        </div>
+        <h3 className="text-xl font-extrabold text-slate-900 mb-2">Browseren kan ikke lave klip</h3>
+        <p className="text-xs text-slate-500 mb-6 leading-relaxed font-medium">{EXPORT_ERROR_MESSAGES.UNSUPPORTED_BROWSER}</p>
+        <button
+          onClick={() => onExportFailed()}
+          className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
+        >
+          Gå tilbage
+        </button>
       </div>
     );
   }
 
-  // Failure and user-cancelled display
-  if (status === "failed" || status === "cancelled") {
-    const isCancelled = status === "cancelled";
+  if (state.kind === "failed" || state.kind === "cancelled") {
+    const isCancelled = state.kind === "cancelled";
+    // A missing source file cannot be fixed by retrying the same export attempt.
+    const isMissingSource = state.kind === "failed" && state.message === MISSING_SOURCE_MESSAGE;
     return (
       <div className="w-full max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 text-center animate-scale-up">
         {isCancelled ? (
@@ -277,74 +123,58 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
           {isCancelled ? "Eksporten blev afbrudt" : "Eksporten fejlede"}
         </h3>
         <p className="text-xs text-slate-500 mb-6 leading-relaxed font-medium">
-          {isCancelled
-            ? "Du afbrød eksporten. Projektet og dine markeringer er stadig gemt."
-            : errorMsg || "Klippet kunne ikke oprettes. Projektet og dine markeringer er stadig gemt."}
+          {state.kind === "cancelled" ? "Du afbrød eksporten. Projektet og dine markeringer er stadig gemt." : state.message}
         </p>
         <div className="flex gap-2.5">
           <button
-            onClick={() => onExportFailed(isCancelled ? "Afbrudt af bruger." : errorMsg)}
+            onClick={() => onExportFailed()}
             className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
           >
             Gå tilbage
           </button>
-          <button
-            onClick={startRealExport}
-            className="flex-1 py-3 bg-brand-clear hover:bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer transition-all"
-          >
-            Prøv igen
-          </button>
+          {!isMissingSource && (
+            <button
+              onClick={() => setAttempt((value) => value + 1)}
+              className="flex-1 py-3 bg-brand-clear hover:bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer transition-all"
+            >
+              Prøv igen
+            </button>
+          )}
         </div>
       </div>
     );
   }
 
+  const progress = state.kind === "running" ? state.progress : null;
+  const percent = progress ? Math.round(progress.fraction * 100) : 0;
+
   return (
     <div className="w-full max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col items-center animate-scale-up">
-      {/* Visual Loader */}
       <div className="relative w-24 h-24 mb-6">
-        {status !== "exported" ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Loader2 className="w-16 h-16 text-brand-clear animate-spin" />
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-brand-success animate-bounce">
-            <CheckCircle2 className="w-16 h-16" />
-          </div>
-        )}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Loader2 className="w-16 h-16 text-brand-clear animate-spin" />
+        </div>
         <div className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-slate-700">
-          {progress}%
+          {percent}%
         </div>
       </div>
 
-      {/* Title */}
-      <h3 className="text-lg font-black text-brand-dark mb-1 text-center">
-        {status === "uploading" ? "Uploader video..." : "Opretter dit taktikklip"}
-      </h3>
-      
-      {/* Live Stage Subtitle */}
+      <h3 className="text-lg font-black text-brand-dark mb-1 text-center">Opretter dit taktikklip</h3>
+
       <p className="text-xs text-brand-clear font-bold tracking-wider uppercase mb-8 text-center animate-pulse">
-        {stage}
+        {progress ? stageText(progress) : EXPORT_STAGE_LABELS.preparing}
       </p>
 
-      {/* Progress slider bar */}
       <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-6">
-        <div
-          className="h-full bg-brand-clear transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
+        <div className="h-full bg-brand-clear transition-all duration-300" style={{ width: `${percent}%` }} />
       </div>
 
-      {/* Explanatory text */}
       <p className="text-[10px] text-slate-400 font-medium text-center mb-6 leading-relaxed max-w-xs">
-        {status === "uploading"
-          ? "Uploader din spilsekvens til CoachClip serveren. Dette kan tage et øjeblik afhængigt af din internetforbindelse."
-          : "Serveren klipper din video og brænder alle cirkler, pile og frysepunkter ind i det færdige klip."}
+        Klippet laves på din enhed – videoen sendes ingen steder. Hold skærmen tændt, til klippet er færdigt.
       </p>
 
-      {/* Cancel button */}
       <button
-        onClick={handleCancel}
+        onClick={() => controllerRef.current?.abort()}
         className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5 transition-all"
       >
         <X className="w-3.5 h-3.5" />

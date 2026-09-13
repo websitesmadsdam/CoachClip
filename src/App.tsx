@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Share2, Download, AlertTriangle, X, CheckCircle2, PlusCircle
 } from "lucide-react";
-import { CoachClipProject, Collection, Annotation, BRAND_COLORS, ArrowAnnotation, CircleAnnotation, TextAnnotation } from "./types";
+import { CoachClipProject, Collection, Annotation } from "./types";
 import { dbService } from "./db";
 import { Sidebar } from "./components/Sidebar";
 import { BottomNav } from "./components/BottomNav";
@@ -20,12 +20,19 @@ import { VideoSelectScreen } from "./screens/VideoSelectScreen";
 import { ClipSelectScreen } from "./screens/ClipSelectScreen";
 import { ClipFineTuneScreen } from "./screens/ClipFineTuneScreen";
 import { AnnotationEditor } from "./features/annotations/AnnotationEditor";
+import { AnnotationCanvas } from "./features/annotations/AnnotationCanvas";
 import { PreviewScreen } from "./screens/PreviewScreen";
 import { SaveProjectScreen } from "./screens/SaveProjectScreen";
 import { ProjectLibraryScreen } from "./screens/ProjectLibraryScreen";
 import { ExportScreen } from "./components/ExportScreen";
 import { CollectionsScreen } from "./components/CollectionsScreen";
 import { useObjectUrl } from "./hooks/useObjectUrl";
+import type { ExportedClip } from "./export/exportClip";
+import { deliverClip } from "./export/deliverClip";
+import { clearExportFiles } from "./export/exportStorage";
+import { AUDIO_WARNING_MESSAGE } from "./export/exportErrors";
+import { hasMatchingSource } from "./utils/projectStatus";
+import { getVideoStageStyle } from "./utils/videoUtils";
 
 // Flag to toggle seeding of demo data
 const ENABLE_DEMO_DATA = false;
@@ -71,6 +78,26 @@ export default function App() {
   const [previewProject, setPreviewProject] = useState<CoachClipProject | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
+  const [reviewVideoSize, setReviewVideoSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+
+  // The finished clip lives only in memory/OPFS while the success screen is shown
+  const [exportedClip, setExportedClip] = useState<ExportedClip | null>(null);
+  const [restoreIntent, setRestoreIntent] = useState<"edit" | "preview">("edit");
+  const previousStepRef = useRef(editorStep);
+
+  // Leftover export files from an earlier visit are never needed again
+  useEffect(() => {
+    void clearExportFiles();
+  }, []);
+
+  // Leaving the success screen discards the clip file; a new export creates a fresh one
+  useEffect(() => {
+    if (previousStepRef.current === "success" && editorStep !== "success") {
+      setExportedClip(null);
+      void clearExportFiles();
+    }
+    previousStepRef.current = editorStep;
+  }, [editorStep]);
 
   // Load projects from DB and Seed Demo data if empty
   const loadProjectsData = async () => {
@@ -198,7 +225,7 @@ export default function App() {
     setVideoUrl(url);
   };
 
-  // Handle local video upload/parsing
+  // Handle the picked video file
   const handleVideoFile = (file: File) => {
     if (!file.type.startsWith("video/")) {
       alert("Videoformatet understøttes ikke endnu. Vælg en MP4- eller MOV-video.");
@@ -222,31 +249,32 @@ export default function App() {
     };
   };
 
-  // Restoring a project whose video ObjectUrl has expired
+  // Restoring a project: videos are never stored, so the coach picks the source file again
   const handleRestoreVideoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0] && projectToRestore) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      setVideoDuration(projectToRestore.sourceVideo.duration);
-      setTrimRange(projectToRestore.clip);
-      setAnnotations(projectToRestore.annotations);
-      setActiveProject(projectToRestore);
-      
-      setProjectToRestore(null);
-      setEditorStep("editor");
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !projectToRestore) return;
+    setSelectedFile(file);
+    setVideoDuration(projectToRestore.sourceVideo.duration);
+    setProjectToRestore(null);
+    if (restoreIntent === "preview") {
+      setPreviewProject(projectToRestore);
+      setPreviewCurrentTime(projectToRestore.clip.startTime);
+      return;
     }
+    setTrimRange(projectToRestore.clip);
+    setAnnotations(projectToRestore.annotations);
+    setActiveProject(projectToRestore);
+    setEditorStep("editor");
   };
 
   const selectProjectForEditing = (proj: CoachClipProject) => {
-    // If original video was uploaded from local storage, we prompt user to reconnect
-    const downloadUrl = proj.export?.downloadUrl;
-    if (!downloadUrl && !proj.exportedVideoUrl && proj.id !== "mock_1" && proj.id !== "mock_2") {
+    // Reuse the file picked in this session when it is the project's source; otherwise ask for it
+    if (!hasMatchingSource(selectedFile, proj)) {
+      setRestoreIntent("edit");
       setProjectToRestore(proj);
       return;
     }
-
-    const url = downloadUrl || proj.exportedVideoUrl || "";
-    setVideoSourceSafely(url);
     setVideoDuration(proj.sourceVideo.duration);
     setTrimRange(proj.clip);
     setAnnotations(proj.annotations);
@@ -340,7 +368,9 @@ export default function App() {
       feedbackType: data.feedbackType,
       category: data.category,
       collectionId: finalCollectionId,
-      exportStatus: exportNow ? "exporting" : "not_exported",
+      // Saved changes make any earlier export outdated
+      exportStatus: "not_exported",
+      export: undefined,
       updatedAt: new Date().toISOString()
     };
 
@@ -370,20 +400,45 @@ export default function App() {
     }
   };
 
-  const handleExportSuccess = async (exportResult: NonNullable<CoachClipProject["export"]>) => {
+  const handleExportSuccess = async (clip: ExportedClip) => {
     if (!activeProject) return;
-    
+
     const finished: CoachClipProject = {
       ...activeProject,
       exportStatus: "exported",
-      export: exportResult,
-      updatedAt: new Date().toISOString()
+      export: {
+        status: "exported",
+        fileName: clip.fileName,
+        fileSize: clip.sizeBytes,
+        duration: clip.durationSec,
+        width: clip.width,
+        height: clip.height,
+        exportedAt: new Date().toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
     };
 
-    await dbService.saveProject(finished);
+    try {
+      await dbService.saveProject(finished);
+      await loadProjectsData();
+    } catch (error) {
+      console.error("Failed to save the finished export to the project database:", error);
+    }
+
+    // The clip file is what matters; the "Eksporteret" badge is cosmetic and can lag.
     setActiveProject(finished);
-    await loadProjectsData();
+    setExportedClip(clip);
     setEditorStep("success");
+  };
+
+  const handleDeliver = async (mode: "share" | "download") => {
+    if (!exportedClip) return;
+    try {
+      await deliverClip(exportedClip, mode);
+    } catch (error) {
+      console.error("Delivering the clip failed:", error);
+      alert("Klippet kunne ikke deles eller gemmes. Prøv igen.");
+    }
   };
 
   // Project cards action helper
@@ -437,6 +492,11 @@ export default function App() {
   };
 
   const openPreview = (proj: CoachClipProject) => {
+    if (!hasMatchingSource(selectedFile, proj)) {
+      setRestoreIntent("preview");
+      setProjectToRestore(proj);
+      return;
+    }
     setPreviewProject(proj);
     setPreviewCurrentTime(proj.clip.startTime);
   };
@@ -542,12 +602,17 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Overlays preview area */}
-                <div className="relative aspect-video w-full bg-black flex items-center justify-center">
+                {/* Overlays preview area, shaped like the video */}
+                <div className="w-full bg-black flex justify-center">
+                <div
+                  className="relative bg-black flex items-center justify-center"
+                  style={getVideoStageStyle(reviewVideoSize.width, reviewVideoSize.height, "60svh")}
+                >
                   <video
                     ref={previewVideoRef}
                     src={videoUrl}
                     className="w-full h-full object-contain pointer-events-none"
+                    onLoadedMetadata={(e) => setReviewVideoSize({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight })}
                     onTimeUpdate={() => {
                       const v = previewVideoRef.current;
                       if (!v) return;
@@ -561,67 +626,8 @@ export default function App() {
                     muted
                   />
 
-                  {/* Overlays */}
-                  <div className="absolute inset-0 pointer-events-none select-none z-20">
-                    <svg className="w-full h-full absolute inset-0">
-                      <defs>
-                        <marker id="arrow-rev-yellow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill={BRAND_COLORS.accent} />
-                        </marker>
-                        <marker id="arrow-rev-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill={BRAND_COLORS.error} />
-                        </marker>
-                        <marker id="arrow-rev-white" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill="#FFFFFF" />
-                        </marker>
-                      </defs>
-
-                      {annotations.filter(a => a.type === "arrow" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((arrow: ArrowAnnotation) => (
-                        <line
-                          key={arrow.id}
-                          x1={`${arrow.startX * 100}%`}
-                          y1={`${arrow.startY * 100}%`}
-                          x2={`${arrow.endX * 100}%`}
-                          y2={`${arrow.endY * 100}%`}
-                          stroke={arrow.color === "yellow" ? BRAND_COLORS.accent : arrow.color === "red" ? BRAND_COLORS.error : "#FFFFFF"}
-                          strokeWidth="4"
-                          markerEnd={`url(#arrow-rev-${arrow.color})`}
-                        />
-                      ))}
-                    </svg>
-
-                    {annotations.filter(a => a.type === "circle" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((circle: CircleAnnotation) => (
-                      <div
-                        key={circle.id}
-                        className="absolute rounded-full border-4"
-                        style={{
-                          left: `${circle.x * 100}%`,
-                          top: `${circle.y * 100}%`,
-                          width: `${circle.radius * 200}%`,
-                          height: `${circle.radius * 200}%`,
-                          transform: "translate(-50%, -50%)",
-                          borderColor: circle.color === "yellow" ? BRAND_COLORS.accent : circle.color === "red" ? BRAND_COLORS.error : "#FFFFFF",
-                          borderStyle: circle.thickness === "bold" ? "solid" : "dashed",
-                          backgroundColor: "rgba(255, 176, 32, 0.05)"
-                        }}
-                      />
-                    ))}
-
-                    {annotations.filter(a => a.type === "text" && previewCurrentTime >= a.startTime && previewCurrentTime <= a.endTime).map((text: TextAnnotation) => (
-                      <div
-                        key={text.id}
-                        className="absolute px-3 py-1.5 rounded-lg text-white font-semibold bg-black/80 shadow text-center max-w-[220px]"
-                        style={{
-                          left: `${text.x * 100}%`,
-                          top: `${text.y * 100}%`,
-                          transform: "translate(-50%, -50%)",
-                          fontSize: text.size === "small" ? "12px" : text.size === "large" ? "18px" : "15px",
-                        }}
-                      >
-                        {text.text}
-                      </div>
-                    ))}
-                  </div>
+                  <AnnotationCanvas videoRef={previewVideoRef} annotations={annotations} time={previewCurrentTime} zIndexClassName="z-20" />
+                </div>
                 </div>
 
                 <div className="p-6 bg-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-200">
@@ -666,29 +672,24 @@ export default function App() {
               />
             )}
 
-            {/* Screen 8: Simulated Export Loader */}
+            {/* Screen 8: Export in the browser */}
             {editorStep === "exporting" && activeProject && (
               <ExportScreen
                 project={activeProject}
                 sourceFile={selectedFile}
                 onExportSuccess={handleExportSuccess}
-                onExportFailed={(errorMsg) => {
-                  if (errorMsg && errorMsg !== "Eksporten blev afbrudt." && errorMsg !== "Afbrudt af bruger.") {
-                    alert(errorMsg);
-                  }
-                  setEditorStep("save");
-                }}
+                onExportFailed={() => setEditorStep("save")}
               />
             )}
 
             {/* Screen 9: Success & Share Options */}
-            {editorStep === "success" && activeProject && (
+            {editorStep === "success" && activeProject && exportedClip && (
               <div className="w-full max-w-md mx-auto bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm text-center animate-scale-up">
                 <div className="w-16 h-16 bg-green-50 text-brand-success rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100">
                   <CheckCircle2 className="w-9 h-9" />
                 </div>
                 <h3 className="text-xl font-black text-brand-dark mb-1">Dit klip er klar!</h3>
-                <p className="text-xs text-slate-400 font-medium mb-6">Det færdige analysebillede og videoen er pakket og klar til brug.</p>
+                <p className="text-xs text-slate-400 font-medium mb-6">Klippet er lavet på din enhed. Del det med holdet, eller gem det som MP4.</p>
 
                 {/* Details card */}
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left mb-6 flex flex-col gap-2.5 text-xs">
@@ -698,42 +699,35 @@ export default function App() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-bold uppercase tracking-wider text-[9px]">Varighed:</span>
-                    <span className="text-slate-800 font-extrabold">{(activeProject.clip.endTime - activeProject.clip.startTime).toFixed(1)} sekunder</span>
+                    <span className="text-slate-800 font-extrabold">{exportedClip.durationSec.toFixed(1).replace(".", ",")} sekunder</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-bold uppercase tracking-wider text-[9px]">Format / Opløsning:</span>
-                    <span className="text-slate-800 font-extrabold">MP4 / 1080p Full HD</span>
+                    <span className="text-slate-800 font-extrabold">MP4 / {exportedClip.width}×{exportedClip.height}</span>
                   </div>
+                  {exportedClip.audioWarning && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2 font-semibold">
+                      {AUDIO_WARNING_MESSAGE}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-2.5">
                   <button
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: activeProject.title,
-                          text: `Se denne sportsanalyse: ${activeProject.title}`,
-                          url: window.location.href,
-                        }).catch(() => {});
-                      } else {
-                        navigator.clipboard.writeText(window.location.href);
-                        alert("Delingslink kopieret til udklipsholderen! Del det via Messenger, Holdsport, Holdsport eller WhatsApp.");
-                      }
-                    }}
+                    onClick={() => handleDeliver("share")}
                     className="w-full py-3.5 bg-brand-clear hover:bg-blue-600 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md shadow-brand-clear/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
                   >
                     <Share2 className="w-4.5 h-4.5" />
                     <span>Del klip</span>
                   </button>
 
-                  <a
-                    href={activeProject.export?.downloadUrl || activeProject.exportedVideoUrl || videoUrl}
-                    download={activeProject.export?.fileName || `${activeProject.title.replace(/\s+/g, "_")}.mp4`}
+                  <button
+                    onClick={() => handleDeliver("download")}
                     className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-850 font-extrabold rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer border border-slate-200"
                   >
                     <Download className="w-4.5 h-4.5" />
                     <span>Download MP4</span>
-                  </a>
+                  </button>
 
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     <button
@@ -854,12 +848,8 @@ export default function App() {
                       </div>
 
                       <div className="border-b border-slate-100 pb-5">
-                        <h4 className="text-sm font-bold text-slate-800 mb-1">PWA Offline status</h4>
-                        <p className="text-xs text-slate-500">Du kan installere CoachClip på din hjemmeskærm, så du altid har taktikklip klar offline.</p>
-                        <div className="mt-3.5 flex items-center gap-2 text-xs font-semibold text-brand-success">
-                          <span className="w-2.5 h-2.5 rounded-full bg-brand-success animate-ping" />
-                          <span>Klar til offline-brug (Service Worker Aktiv)</span>
-                        </div>
+                        <h4 className="text-sm font-bold text-slate-800 mb-1">Eksport på din enhed</h4>
+                        <p className="text-xs text-slate-500">Klip laves direkte i din browser – videoen sendes ingen steder. På iPhone og iPad kræver det iOS 26 eller nyere.</p>
                       </div>
 
                       <div className="pb-2">
@@ -912,8 +902,8 @@ export default function App() {
             </div>
             <h3 className="text-lg font-black text-slate-800 mb-1">Video kan ikke findes</h3>
             <p className="text-xs text-slate-500 mb-5 leading-relaxed font-medium">
-              For at beskytte dit lager gemmer CoachClip ikke tunge rå-videoer i skyen.<br />
-              Vælg filen <strong className="text-slate-800">"{projectToRestore.sourceVideo.fileName}"</strong> igen for at fortsætte redigeringen.
+              CoachClip gemmer aldrig selve videoen på enheden.<br />
+              Vælg filen <strong className="text-slate-800">"{projectToRestore.sourceVideo.fileName}"</strong> igen for at fortsætte.
             </p>
 
             <button
@@ -973,7 +963,7 @@ export default function App() {
             setPreviewProject(null);
             selectProjectForEditing(previewProject);
           }}
-          videoUrl={previewProject.export?.downloadUrl || previewProject.exportedVideoUrl || ""}
+          videoUrl={videoUrl}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderAnnotations, isAnnotationActive, type AnnotationContext2D } from "./renderAnnotations";
+import { renderAnnotations, isAnnotationActive, annotationFont, type AnnotationContext2D } from "./renderAnnotations";
 import type { Annotation } from "../../shared/annotations";
 
 type Call = { name: string; args: unknown[]; state: Record<string, unknown> };
@@ -100,5 +100,11 @@ describe("renderAnnotations", () => {
     expect(line.state.fillStyle).toBe("#FFFFFF");
     expect(line.state.textAlign).toBe("center");
     expect(String(line.state.font)).toContain("bold");
+  });
+});
+
+describe("annotationFont", () => {
+  it("matches the font the export canvas draws with", () => {
+    expect(annotationFont(40)).toBe("bold 40px Arial, Helvetica, sans-serif");
   });
 });

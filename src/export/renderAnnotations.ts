@@ -20,7 +20,9 @@ export function isAnnotationActive(annotation: Annotation, time: number): boolea
   return annotation.type !== "freeze" && annotation.startTime <= time && time <= annotation.endTime;
 }
 
-const fontFor = (fontSize: number) => `${ANNOTATION_STYLE.fontWeight} ${fontSize}px ${ANNOTATION_STYLE.fontFamily}`;
+export function annotationFont(fontSize: number): string {
+  return `${ANNOTATION_STYLE.fontWeight} ${fontSize}px ${ANNOTATION_STYLE.fontFamily}`;
+}
 
 function drawCircle(ctx: AnnotationContext2D, width: number, height: number, a: CircleAnnotation, scale: number) {
   const { radiusPx } = getCircleGeometry(width, height, a.radius);
@@ -59,7 +61,7 @@ function drawArrow(ctx: AnnotationContext2D, width: number, height: number, a: A
 
 function drawText(ctx: AnnotationContext2D, width: number, height: number, a: TextAnnotation) {
   const measure = (line: string, fontSize: number) => {
-    ctx.font = fontFor(fontSize);
+    ctx.font = annotationFont(fontSize);
     return ctx.measureText(line).width;
   };
   const layout = layoutTextAnnotation(width, height, a.x, a.y, a.size, a.text, measure);
@@ -68,7 +70,7 @@ function drawText(ctx: AnnotationContext2D, width: number, height: number, a: Te
   ctx.fillStyle = ANNOTATION_STYLE.textBackground;
   ctx.roundRect(layout.rectX, layout.rectY, layout.boxWidth, layout.boxHeight, layout.cornerRadius);
   ctx.fill();
-  ctx.font = fontFor(layout.fontSize);
+  ctx.font = annotationFont(layout.fontSize);
   ctx.fillStyle = ANNOTATION_STYLE.textColor;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";

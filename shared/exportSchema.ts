@@ -3,29 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Annotation } from "./annotations";
-
-export type ExportRequestMetadata = {
-  projectId: string;
-  projectTitle: string;
-  clip: {
-    startTime: number;
-    endTime: number;
-  };
-  sourceVideo: {
-    fileName: string;
-    duration: number;
-    width?: number;
-    height?: number;
-  };
-  annotations: Annotation[];
-  output: {
-    maxWidth: number;
-    maxHeight: number;
-    format: "mp4";
-  };
-};
-
 export function sanitizeExportFileName(title: string): string {
   if (!title || !title.trim()) return "CoachClip.mp4";
 

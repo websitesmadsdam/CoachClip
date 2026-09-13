@@ -6,6 +6,7 @@
 import React from "react";
 import { PlusCircle, Film, Play, Trash2, ArrowRight } from "lucide-react";
 import { CoachClipProject } from "../types";
+import { isProjectExported } from "../utils/projectStatus";
 
 interface HomeScreenProps {
   projects: CoachClipProject[];
@@ -65,7 +66,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {
               step: "01",
               title: "Vælg din video",
-              desc: "Upload en trænings- eller kampvideo direkte fra din mobil eller computer.",
+              desc: "Vælg en trænings- eller kampvideo direkte fra din mobil eller computer.",
             },
             {
               step: "02",
@@ -157,12 +158,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
                     <span
                       className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                        proj.exportStatus === "exported"
+                        isProjectExported(proj)
                           ? "bg-green-50 text-brand-success"
                           : "bg-amber-50 text-amber-600"
                       }`}
                     >
-                      {proj.exportStatus === "exported" ? "Eksporteret" : "Ikke eksporteret"}
+                      {isProjectExported(proj) ? "Eksporteret" : "Ikke eksporteret"}
                     </span>
 
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
