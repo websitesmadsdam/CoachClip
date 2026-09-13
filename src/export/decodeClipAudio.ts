@@ -36,6 +36,8 @@ async function decodeWithWebCodecs(track: InputAudioTrack, start: number, end: n
     samples.forEach((s) => s.close());
     throw error;
   }
+  // A decoder that silently yields nothing gets the same second chance as one that throws.
+  if (samples.length === 0) throw new Error("WebCodecs produced no audio samples");
   return toDecodedAudio(samples, "webcodecs");
 }
 

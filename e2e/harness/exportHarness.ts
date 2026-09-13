@@ -163,13 +163,21 @@ async function inspect(request: HarnessInspectRequest): Promise<HarnessInspectio
   return result;
 }
 
-async function download(): Promise<string> {
+function lastKeptClip(): ExportedClip {
   const clip = [...kept.values()].pop();
   if (!clip) throw new Error("nothing exported");
-  return deliverClip(clip, "download");
+  return clip;
 }
 
-const harness = { run, inspect, listExportFiles, clearExportFiles, download };
+async function download(): Promise<string> {
+  return deliverClip(lastKeptClip(), "download");
+}
+
+async function share(): Promise<string> {
+  return deliverClip(lastKeptClip(), "share");
+}
+
+const harness = { run, inspect, listExportFiles, clearExportFiles, download, share };
 declare global {
   interface Window {
     coachclipHarness: typeof harness;

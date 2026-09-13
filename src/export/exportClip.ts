@@ -15,7 +15,6 @@ import {
   canEncodeAudio,
   type VideoSample,
 } from "mediabunny";
-import { registerAacEncoder } from "@mediabunny/aac-encoder";
 import type { CoachClipProject } from "../types";
 import { computeOutputDimensions, computeVideoBitrate } from "../../shared/videoGeometry";
 import { validateExport } from "../../shared/exportValidation";
@@ -102,8 +101,22 @@ async function* framesAtTimes(sink: VideoSampleSink, segment: VideoSegment, time
 export async function exportClip(options: ExportClipOptions): Promise<ExportedClip> {
   const { file, project, signal, onProgress = () => {}, overrides = {} } = options;
   let wasHidden = typeof document !== "undefined" && document.hidden;
+  let finished = false;
   const onVisibility = () => {
-    if (document.hidden) wasHidden = true;
+    if (document.hidden) {
+      wasHidden = true;
+      return;
+    }
+    // Browsers release the wake lock while the page is hidden; ask again when the coach returns.
+    if (wakeLock?.released && navigator.wakeLock) {
+      navigator.wakeLock
+        .request("screen")
+        .then((lock) => {
+          if (finished) void lock.release();
+          else wakeLock = lock;
+        })
+        .catch(() => {});
+    }
   };
 
   let input: Input | null = null;
@@ -142,7 +155,12 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
     throwIfAborted(signal);
 
     const audioTrack = await input.getPrimaryAudioTrack();
-    if (audioTrack) {
+    // An audio track that ends before the clip starts means "no audio here", not "unreadable audio".
+    // If the track duration cannot be computed, assume it covers the clip and let decoding decide.
+    const audioCoversClip = audioTrack
+      ? (await audioTrack.computeDuration().catch(() => Number.POSITIVE_INFINITY)) > project.clip.startTime
+      : false;
+    if (audioTrack && audioCoversClip) {
       onProgress({ stage: "decoding_audio", fraction: 0.01 });
       audio = await decodeClipAudio(
         input,
@@ -180,6 +198,8 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
         bitrate: AUDIO_BITRATE,
       }).catch(() => false);
       if (!nativeAac && !aacEncoderRegistered) {
+        // Loaded on demand: the wasm encoder is large and iPhones (iOS 26+) encode AAC natively.
+        const { registerAacEncoder } = await import("@mediabunny/aac-encoder");
         registerAacEncoder();
         aacEncoderRegistered = true;
       }
@@ -251,7 +271,7 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
       height,
       hasAudio: !!audio,
       audioPath: audio?.path,
-      audioWarning: audioTrack && !audio ? "AUDIO_UNREADABLE" : undefined,
+      audioWarning: audioTrack && audioCoversClip && !audio ? "AUDIO_UNREADABLE" : undefined,
     };
   } catch (error) {
     const exportError = toExportError(error, { cancelled: signal.aborted, wasHidden });
@@ -261,6 +281,7 @@ export async function exportClip(options: ExportClipOptions): Promise<ExportedCl
     await sink?.discard().catch(() => {});
     throw exportError;
   } finally {
+    finished = true;
     closeDecodedAudio(audio);
     input?.dispose();
     await wakeLock?.release().catch(() => {});

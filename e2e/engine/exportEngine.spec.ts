@@ -182,3 +182,21 @@ test("download delivers an mp4 with the sanitized file name", async ({ page }) =
   ]);
   expect(download.suggestedFilename()).toBe("Traening_Aaen.mp4");
 });
+
+test("share falls back to download when the share sheet is not allowed", async ({ page }) => {
+  const result = await run(page, { fixtureUrl: LANDSCAPE, clip, annotations: [], title: "Del mig", keepAs: "share" });
+  expect(result.ok, result.errorMessage).toBe(true);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true });
+    Object.defineProperty(navigator, "share", {
+      value: () => Promise.reject(new DOMException("User gesture expired", "NotAllowedError")),
+      configurable: true,
+    });
+  });
+  const [download, delivery] = await Promise.all([
+    page.waitForEvent("download"),
+    page.evaluate(() => window.coachclipHarness.share()),
+  ]);
+  expect(delivery).toBe("downloaded");
+  expect(download.suggestedFilename()).toBe("Del_mig.mp4");
+});
