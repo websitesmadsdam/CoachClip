@@ -4,6 +4,7 @@ const E2E_ORIGIN = "http://127.0.0.1:3001";
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["engine/**"],
   timeout: 60000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

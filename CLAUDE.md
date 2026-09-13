@@ -13,7 +13,7 @@ der skal udfyldes.
 
 ```bash
 npm run dev        # Vite + Express på http://localhost:3000 (samme port)
-npm run verify     # HELE porten: lint → typecheck → unit → build → 9 smoke → E2E
+npm run verify     # HELE porten: lint → typecheck → unit → build → engine → 9 smoke → E2E
 npm test           # kun vitest
 npm run smoke:export:freeze   # enkelt smoke-test, se package.json for resten
 npm run build && npm run start # produktion
@@ -22,7 +22,10 @@ npm run build && npm run start # produktion
 **Forudsætninger:** Node 20 eller 22 (`engines: >=20 <23`). `ffmpeg` og `ffprobe` skal
 ligge i PATH — serveren bliver ikke `ready` uden dem, og både `verify:smoke` og
 `verify:e2e` dør uden dem. CI og Dockerfile kører **Node 20**, så kører du en nyere Node
-lokalt, betyder grøn `verify` lokalt ikke nødvendigvis grøn CI.
+lokalt, betyder grøn `verify` lokalt ikke nødvendigvis grøn CI. `npm run verify` og
+`npm run test:engine` kræver desuden Google Chrome installeret, fordi
+in-browser-eksportmotorens tests kører i Playwright med `channel: "chrome"` (Playwrights
+egen Chromium kan ikke H.264-encode).
 
 `npm run verify` skal være grøn før commit. Den kører rigtige FFmpeg-eksporter og
 sammenligner pixels, så den tager nogle minutter — det er meningen.
