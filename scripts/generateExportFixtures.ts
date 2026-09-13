@@ -23,18 +23,20 @@ function run(command: string, args: string[]): string {
 
 const encodeArgs = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-movflags", "+faststart"];
 
-function withTone(file: string, fps: number, seconds: number) {
-  run("ffmpeg", [
+function withTone(file: string, fps: number, seconds: number, audioFilter?: string) {
+  const args = [
     "-hide_banner", "-loglevel", "error", "-y",
     "-f", "lavfi", "-i", `testsrc=size=640x360:rate=${fps}:duration=${seconds}`,
     "-f", "lavfi", "-i", `sine=frequency=440:sample_rate=48000:duration=${seconds}`,
-    "-ac", "2", "-c:a", "aac", "-b:a", "96k", "-shortest",
-    ...encodeArgs,
-    path.join(outDir, file),
-  ]);
+  ];
+  if (audioFilter) args.push("-af", audioFilter);
+  args.push("-ac", "2", "-c:a", "aac", "-b:a", "96k", "-shortest", ...encodeArgs, path.join(outDir, file));
+  run("ffmpeg", args);
 }
 
-withTone("landscape-tone.mp4", 30, 8);
+// Two silent gaps (2.0-2.2s and 4.0-4.2s) so audio-timing tests can prove the tone lands at the
+// right source time instead of just checking peak levels, which an offset would still pass.
+withTone("landscape-tone.mp4", 30, 8, "volume=volume=0:enable='between(t,2,2.2)+between(t,4,4.2)'");
 withTone("landscape-60fps-tone.mp4", 60, 4);
 
 const silentTmp = path.join(outDir, "_silent-landscape.mp4");
