@@ -62,6 +62,29 @@ test("exports landscape clip with freeze, annotations and audio", async ({ page 
   expect(outside).toBeLessThan(0.005);
   expect(activeVideo).toBeGreaterThan(0.02);
   expect(activeFreeze).toBeGreaterThan(0.02);
+
+  // landscape-tone.mp4 has silent gaps at source 2.0-2.2s and 4.0-4.2s. The clip runs 1-5 with a
+  // 2s freeze at 3, so output 0-2s is source 1-3, output 2-4s is the freeze, output 4-6s is
+  // source 3-5 — the gaps land at output 1.0-1.2s and 5.0-5.2s. This proves the WebCodecs audio
+  // path lands tone at the right source time rather than merely being loud somewhere.
+  const gaps = await inspect(page, {
+    name: "annotated",
+    audioWindows: [
+      [0.85, 0.95],
+      [1.05, 1.15],
+      [1.25, 1.35],
+      [4.85, 4.95],
+      [5.05, 5.15],
+      [5.25, 5.35],
+    ],
+  });
+  const [beforeGap1, inGap1, afterGap1, beforeGap2, inGap2, afterGap2] = gaps.audioPeaks;
+  expect(beforeGap1).toBeGreaterThan(0.05);
+  expect(inGap1).toBeLessThan(0.02);
+  expect(afterGap1).toBeGreaterThan(0.05);
+  expect(beforeGap2).toBeGreaterThan(0.05);
+  expect(inGap2).toBeLessThan(0.02);
+  expect(afterGap2).toBeGreaterThan(0.05);
 });
 
 test("keeps rotated portrait video portrait and exports without audio", async ({ page }) => {
@@ -90,6 +113,27 @@ test("Web Audio fallback keeps audio and silence during freeze", async ({ page }
   expect(inspection.audioPeaks[0]).toBeGreaterThan(0.05);
   expect(inspection.audioPeaks[1]).toBeLessThan(0.001);
   expect(inspection.audioPeaks[2]).toBeGreaterThan(0.05);
+
+  // Same gap-position check as the WebCodecs path (see the landscape test above): this is the
+  // path iPhones use, so an AAC priming or trim offset here would otherwise go unnoticed.
+  const gaps = await inspect(page, {
+    name: "webaudio",
+    audioWindows: [
+      [0.85, 0.95],
+      [1.05, 1.15],
+      [1.25, 1.35],
+      [4.85, 4.95],
+      [5.05, 5.15],
+      [5.25, 5.35],
+    ],
+  });
+  const [beforeGap1, inGap1, afterGap1, beforeGap2, inGap2, afterGap2] = gaps.audioPeaks;
+  expect(beforeGap1).toBeGreaterThan(0.05);
+  expect(inGap1).toBeLessThan(0.02);
+  expect(afterGap1).toBeGreaterThan(0.05);
+  expect(beforeGap2).toBeGreaterThan(0.05);
+  expect(inGap2).toBeLessThan(0.02);
+  expect(afterGap2).toBeGreaterThan(0.05);
 });
 
 test("in-memory storage fallback produces the same clip", async ({ page }) => {
