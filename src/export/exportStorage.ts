@@ -46,6 +46,11 @@ export async function createExportSink(options: { forceMemory?: boolean } = {}):
   const writable = await handle.createWritable();
   let closed = false;
 
+  // Mediabunny's StreamTarget closes the writable stream both on a normal finalize() and on
+  // output.cancel() — cancelling does not abort it. So the `close` handler below runs for a
+  // cancelled export too, and the partial file is committed to OPFS; discard() is what removes
+  // it afterwards. The `abort` handler only fires for failures that happen before the stream is
+  // closed (e.g. a write error), where there is no complete file to commit.
   const stream = new WritableStream<StreamTargetChunk>({
     write: (chunk) => writable.write({ type: "write", position: chunk.position, data: chunk.data }),
     close: async () => {
@@ -63,6 +68,10 @@ export async function createExportSink(options: { forceMemory?: boolean } = {}):
     target: new StreamTarget(stream, { chunked: true }),
     fastStart: false,
     getFile: async (fileName) => new File([await handle.getFile()], fileName, { type: "video/mp4" }),
+    // Runs after either close or abort above. If the stream was already closed (including after
+    // a cancel()), the committed file still needs removing; if it was aborted instead, the
+    // writable itself was never fully written and abort() already released it, so this is a
+    // harmless no-op guard rather than the primary cleanup path.
     discard: async () => {
       if (!closed) await writable.abort().catch(() => {});
       await root.removeEntry(name).catch(() => {});
